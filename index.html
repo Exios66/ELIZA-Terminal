@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI-Powered Terminal Emulator</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+      background-color: var(--bg-color, #000);
+      color: var(--text-color, #0f0);
+    }
+    #terminal {
+      padding: 10px;
+      height: 100vh;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      display: flex;
+      flex-direction: column;
+    }
+    #input-line {
+      display: flex;
+    }
+    #prompt {
+      flex-shrink: 0;
+    }
+    #input {
+      flex-grow: 1;
+      background: none;
+      border: none;
+      color: inherit;
+      outline: none;
+      font-family: inherit;
+    }
+    .output {
+      margin-bottom: 10px;
+    }
+    .theme-switcher {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #222;
+      color: #fff;
+      padding: 5px;
+      cursor: pointer;
+      border: 1px solid #0f0;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal">
+    <div class="output">Welcome to the AI-powered Linux terminal. Type 'mode eliza' to switch modes, 'theme list' for themes, or 'exit' to quit.</div>
+    <div id="input-line">
+      <span id="prompt">$</span>
+      <input id="input" autocomplete="off" autofocus />
+    </div>
+  </div>
+  <div class="theme-switcher" id="theme-switcher">Themes</div>
+  <script>
+    // Terminal Emulator with Enhanced Features
+    class Terminal {
+      constructor(outputElement, inputElement, promptElement) {
+        this.outputElement = outputElement;
+        this.inputElement = inputElement;
+        this.promptElement = promptElement;
+        this.mode = "terminal";
+        this.blockedCommands = ["rm -rf /", "curl", "wget"];
+        this.themes = {
+          "classic": { bg: "#000", text: "#0f0" },
+          "light": { bg: "#fff", text: "#000" },
+          "matrix": { bg: "#000", text: "#00ff00" },
+          "blue": { bg: "#001f3f", text: "#00aced" }
+        };
+        this.init();
+      }
+
+      init() {
+        this.inputElement.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            const command = this.inputElement.value.trim();
+            this.processCommand(command);
+            this.inputElement.value = "";
+          }
+        });
+      }
+
+      processCommand(command) {
+        if (command === "exit") {
+          this.printOutput("Goodbye!");
+          return;
+        }
+
+        if (command.startsWith("mode")) {
+          const mode = command.split(" ")[1];
+          this.switchMode(mode);
+          return;
+        }
+
+        if (command.startsWith("theme")) {
+          const theme = command.split(" ")[1];
+          this.switchTheme(theme);
+          return;
+        }
+
+        if (this.mode === "eliza") {
+          this.runEliza(command);
+        } else {
+          this.runTerminal(command);
+        }
+      }
+
+      switchMode(mode) {
+        if (mode === "eliza" || mode === "terminal") {
+          this.mode = mode;
+          this.printOutput(`Switched to ${mode} mode.`);
+        } else {
+          this.printOutput("Invalid mode. Supported modes: terminal, eliza");
+        }
+      }
+
+      switchTheme(theme) {
+        if (theme === "list") {
+          this.printOutput(`Available themes: ${Object.keys(this.themes).join(", ")}`);
+        } else if (this.themes[theme]) {
+          document.body.style.setProperty("--bg-color", this.themes[theme].bg);
+          document.body.style.setProperty("--text-color", this.themes[theme].text);
+          this.printOutput(`Switched to ${theme} theme.`);
+        } else {
+          this.printOutput("Invalid theme. Use 'theme list' to see available themes.");
+        }
+      }
+
+      runEliza(input) {
+        const responses = [
+          "Why do you say that?",
+          "Can you elaborate on that?",
+          "What makes you think so?",
+          "Do you often feel this way?",
+          "Tell me more about your feelings.",
+          "How does that make you feel?",
+          "What do you think about that?",
+          "Why do you believe that?"
+        ];
+        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+        this.printOutput(`ELIZA: ${randomResponse}`);
+      }
+
+      runTerminal(command) {
+        if (this.blockedCommands.some((blocked) => command.includes(blocked))) {
+          this.printOutput(`Permission denied: executing '${command}' is not allowed.`);
+        } else if (command === "ls") {
+          this.printOutput("Desktop  Documents  Downloads  Music  Pictures  Videos");
+        } else if (command === "pwd") {
+          this.printOutput("/home/user");
+        } else if (command === "whoami") {
+          this.printOutput("user");
+        } else if (command === "uname -a") {
+          this.printOutput("Linux localhost 5.4.0-42-generic x86_64");
+        } else if (command === "date") {
+          this.printOutput(new Date().toString());
+        } else if (command === "df") {
+          this.printOutput("Filesystem     1K-blocks     Used Available Use% Mounted on\n/dev/sda1      488281250 100000000  388281250  20% /");
+        } else if (command === "uptime") {
+          this.printOutput(" 10:24:10 up 5 days,  4:52,  3 users,  load average: 0.00, 0.01, 0.05");
+        } else if (command === "cal") {
+          this.printOutput("     January 2025      \nSu Mo Tu We Th Fr Sa\n     1  2  3  4  5  6\n7  8  9 10 11 12 13");
+        } else {
+          this.printOutput(`bash: ${command.split(" ")[0]}: command not found`);
+        }
+      }
+
+      printOutput(output) {
+        const outputDiv = document.createElement("div");
+        outputDiv.className = "output";
+        outputDiv.textContent = output;
+        this.outputElement.insertBefore(outputDiv, this.outputElement.lastChild);
+        this.outputElement.scrollTop = this.outputElement.scrollHeight;
+      }
+    }
+
+    // Initialize Terminal
+    const terminalElement = document.getElementById("terminal");
+    const inputElement = document.getElementById("input");
+    const promptElement = document.getElementById("prompt");
+
+    const terminal = new Terminal(terminalElement, inputElement, promptElement);
+
+    // Theme Switcher
+    document.getElementById("theme-switcher").addEventListener("click", () => {
+      terminal.switchTheme("list");
+    });
+  </script>
+</body>
+</html>
