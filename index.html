@@ -58,7 +58,6 @@
   </div>
   <div class="theme-switcher" id="theme-switcher">Themes</div>
   <script>
-    // Terminal Emulator with Enhanced Features
     class Terminal {
       constructor(outputElement, inputElement, promptElement) {
         this.outputElement = outputElement;
@@ -72,6 +71,7 @@
           "matrix": { bg: "#000", text: "#00ff00" },
           "blue": { bg: "#001f3f", text: "#00aced" }
         };
+        this.elizaResponses = this.populateElizaResponses();
         this.init();
       }
 
@@ -83,6 +83,32 @@
             this.inputElement.value = "";
           }
         });
+      }
+
+      populateElizaResponses() {
+        return {
+          default: ["Why do you say that?", "Can you elaborate?", "What makes you feel this way?"],
+          feelings: [
+            "Tell me more about your feelings.",
+            "Do you often feel this way?",
+            "What triggers these emotions?"
+          ],
+          relationships: [
+            "How are your relationships?",
+            "Is there someone important you'd like to talk about?",
+            "Why do you think this person affects you?"
+          ],
+          work: [
+            "How is work going for you?",
+            "Do you feel satisfied with your work?",
+            "What challenges are you facing at work?"
+          ],
+          general: [
+            "Tell me more about that.",
+            "Why do you think so?",
+            "What does this mean to you?"
+          ]
+        };
       }
 
       processCommand(command) {
@@ -132,18 +158,21 @@
       }
 
       runEliza(input) {
-        const responses = [
-          "Why do you say that?",
-          "Can you elaborate on that?",
-          "What makes you think so?",
-          "Do you often feel this way?",
-          "Tell me more about your feelings.",
-          "How does that make you feel?",
-          "What do you think about that?",
-          "Why do you believe that?"
-        ];
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-        this.printOutput(`ELIZA: ${randomResponse}`);
+        let response;
+        if (input.includes("feel")) {
+          response = this.getRandomResponse(this.elizaResponses.feelings);
+        } else if (input.includes("relationship") || input.includes("friend")) {
+          response = this.getRandomResponse(this.elizaResponses.relationships);
+        } else if (input.includes("work") || input.includes("job")) {
+          response = this.getRandomResponse(this.elizaResponses.work);
+        } else {
+          response = this.getRandomResponse(this.elizaResponses.default);
+        }
+        this.printOutput(`ELIZA: ${response}`);
+      }
+
+      getRandomResponse(responses) {
+        return responses[Math.floor(Math.random() * responses.length)];
       }
 
       runTerminal(command) {
@@ -165,6 +194,10 @@
           this.printOutput(" 10:24:10 up 5 days,  4:52,  3 users,  load average: 0.00, 0.01, 0.05");
         } else if (command === "cal") {
           this.printOutput("     January 2025      \nSu Mo Tu We Th Fr Sa\n     1  2  3  4  5  6\n7  8  9 10 11 12 13");
+        } else if (command.startsWith("touch")) {
+          this.printOutput(`Created file: ${command.split(" ")[1]}`);
+        } else if (command.startsWith("mkdir")) {
+          this.printOutput(`Created directory: ${command.split(" ")[1]}`);
         } else {
           this.printOutput(`bash: ${command.split(" ")[0]}: command not found`);
         }
@@ -179,14 +212,11 @@
       }
     }
 
-    // Initialize Terminal
     const terminalElement = document.getElementById("terminal");
     const inputElement = document.getElementById("input");
     const promptElement = document.getElementById("prompt");
-
     const terminal = new Terminal(terminalElement, inputElement, promptElement);
 
-    // Theme Switcher
     document.getElementById("theme-switcher").addEventListener("click", () => {
       terminal.switchTheme("list");
     });
