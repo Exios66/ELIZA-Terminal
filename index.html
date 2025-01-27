@@ -1,30 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI-Powered Terminal Emulator</title>
   <style>
+    :root {
+      --bg-color: #000;
+      --text-color: #0f0;
+      --prompt-color: #0f0;
+      --highlight-color: #222;
+    }
+
     body {
       margin: 0;
       font-family: monospace;
-      background-color: var(--bg-color, #000);
-      color: var(--text-color, #0f0);
+      background-color: var(--bg-color);
+      color: var(--text-color);
     }
+
     #terminal {
-      padding: 10px;
       height: 100vh;
-      overflow-y: auto;
-      white-space: pre-wrap;
       display: flex;
       flex-direction: column;
+      padding: 10px;
+      overflow-y: auto;
+      box-sizing: border-box;
+      white-space: pre-wrap;
     }
+
+    .output {
+      margin-bottom: 10px;
+    }
+
     #input-line {
       display: flex;
+      align-items: center;
     }
+
     #prompt {
+      color: var(--prompt-color);
+      margin-right: 5px;
       flex-shrink: 0;
     }
+
     #input {
       flex-grow: 1;
       background: none;
@@ -32,192 +51,388 @@
       color: inherit;
       outline: none;
       font-family: inherit;
+      font-size: 1rem;
     }
-    .output {
-      margin-bottom: 10px;
-    }
+
     .theme-switcher {
       position: fixed;
       top: 10px;
       right: 10px;
-      background: #222;
-      color: #fff;
-      padding: 5px;
+      background: var(--highlight-color);
+      color: var(--text-color);
+      padding: 8px 12px;
       cursor: pointer;
-      border: 1px solid #0f0;
+      border: 1px solid var(--prompt-color);
+      user-select: none;
+      font-size: 0.9rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Basic scroll styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #333;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #666;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #888;
     }
   </style>
 </head>
 <body>
   <div id="terminal">
-    <div class="output">Welcome to the AI-powered Linux terminal. Type 'mode eliza' to switch modes, 'theme list' for themes, or 'exit' to quit.</div>
+    <div class="output" id="welcome-message">
+      Welcome to the AI-Powered Terminal Emulator!
+      Type <strong>'help'</strong> to see available commands.
+      Type <strong>'mode eliza'</strong> to switch to conversation mode.
+    </div>
     <div id="input-line">
       <span id="prompt">$</span>
-      <input id="input" autocomplete="off" autofocus />
+      <input id="input" type="text" autocomplete="off" autofocus />
     </div>
   </div>
-  <div class="theme-switcher" id="theme-switcher">Themes</div>
+
+  <!-- Theme Switcher Button -->
+  <div class="theme-switcher" id="theme-switcher">Theme</div>
+
   <script>
+    "use strict";
+
     class Terminal {
-      constructor(outputElement, inputElement, promptElement) {
-        this.outputElement = outputElement;
-        this.inputElement = inputElement;
+      constructor(outputContainer, inputField, promptElement) {
+        this.outputContainer = outputContainer;
+        this.inputField = inputField;
         this.promptElement = promptElement;
+
+        // Current mode: "terminal" or "eliza"
         this.mode = "terminal";
+
+        // Keep track of command history
+        this.commandHistory = [];
+        this.historyIndex = -1;
+
+        // Setup blocked or restricted commands
         this.blockedCommands = ["rm -rf /", "curl", "wget"];
+
+        // Define available themes
         this.themes = {
-          "classic": { bg: "#000", text: "#0f0" },
-          "light": { bg: "#fff", text: "#000" },
-          "matrix": { bg: "#000", text: "#00ff00" },
-          "blue": { bg: "#001f3f", text: "#00aced" }
+          classic:  { bg: "#000",      text: "#0f0" },
+          light:    { bg: "#fafafa",  text: "#111" },
+          dark:     { bg: "#111",      text: "#eee" },
+          matrix:   { bg: "#000",      text: "#00ff00" },
+          blue:     { bg: "#001f3f",   text: "#00aced" }
         };
-        this.elizaResponses = this.populateElizaResponses();
+
+        // Setup the Eliza conversation logic
+        // This can be expanded into a more sophisticated pattern-based approach
+        this.elizaResponses = {
+          default:       ["Why do you say that?", "Can you elaborate?", "What makes you feel this way?"],
+          feelings:      ["Tell me more about your feelings.", "Do you often feel this way?", "What triggers these emotions?"],
+          relationships: ["How are your relationships?", "Is there someone important you'd like to talk about?", "Why do you think this person affects you?"],
+          work:          ["How is work going for you?", "Do you feel satisfied with your work?", "What challenges are you facing at work?"],
+          general:       ["Tell me more about that.", "Why do you think so?", "What does this mean to you?"]
+        };
+
+        // Attach event listeners
         this.init();
+        // Load user theme preference if stored
+        this.loadThemePreference();
       }
 
       init() {
-        this.inputElement.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") {
-            const command = this.inputElement.value.trim();
+        this.inputField.addEventListener("keydown", (event) => {
+          // Handle Enter
+          if (event.key === "Enter") {
+            const command = this.inputField.value.trim();
             this.processCommand(command);
-            this.inputElement.value = "";
+            this.inputField.value = "";
+            this.commandHistory.push(command);
+            this.historyIndex = this.commandHistory.length;
+          }
+          // Handle arrow keys for command recall
+          else if (event.key === "ArrowUp") {
+            if (this.historyIndex > 0) {
+              this.historyIndex--;
+              this.inputField.value = this.commandHistory[this.historyIndex];
+            }
+            event.preventDefault();
+          }
+          else if (event.key === "ArrowDown") {
+            if (this.historyIndex < this.commandHistory.length - 1) {
+              this.historyIndex++;
+              this.inputField.value = this.commandHistory[this.historyIndex];
+            } else {
+              this.historyIndex = this.commandHistory.length;
+              this.inputField.value = "";
+            }
+            event.preventDefault();
           }
         });
       }
 
-      populateElizaResponses() {
-        return {
-          default: ["Why do you say that?", "Can you elaborate?", "What makes you feel this way?"],
-          feelings: [
-            "Tell me more about your feelings.",
-            "Do you often feel this way?",
-            "What triggers these emotions?"
-          ],
-          relationships: [
-            "How are your relationships?",
-            "Is there someone important you'd like to talk about?",
-            "Why do you think this person affects you?"
-          ],
-          work: [
-            "How is work going for you?",
-            "Do you feel satisfied with your work?",
-            "What challenges are you facing at work?"
-          ],
-          general: [
-            "Tell me more about that.",
-            "Why do you think so?",
-            "What does this mean to you?"
-          ]
-        };
-      }
-
+      // Process each command
       processCommand(command) {
+        if (!command) return;
+        this.printOutput(`$ ${command}`);
+
+        // Global exit command
         if (command === "exit") {
-          this.printOutput("Goodbye!");
+          this.printOutput("Session terminated. Refresh to start anew.");
           return;
         }
 
-        if (command.startsWith("mode")) {
-          const mode = command.split(" ")[1];
-          this.switchMode(mode);
+        // Switch modes
+        if (command.startsWith("mode ")) {
+          const [, modeName] = command.split(" ");
+          this.switchMode(modeName);
           return;
         }
 
-        if (command.startsWith("theme")) {
-          const theme = command.split(" ")[1];
-          this.switchTheme(theme);
+        // Switch themes
+        if (command.startsWith("theme ")) {
+          const [, themeName] = command.split(" ");
+          this.switchTheme(themeName);
           return;
         }
 
+        // In Eliza mode, handle conversation
         if (this.mode === "eliza") {
           this.runEliza(command);
-        } else {
-          this.runTerminal(command);
+          return;
         }
+
+        // If normal terminal mode, parse terminal commands
+        this.runTerminal(command);
       }
 
       switchMode(mode) {
-        if (mode === "eliza" || mode === "terminal") {
-          this.mode = mode;
-          this.printOutput(`Switched to ${mode} mode.`);
+        if (mode === "eliza") {
+          this.mode = "eliza";
+          this.printOutput("Switched to ELIZA conversation mode. Type 'mode terminal' to go back.");
+        } else if (mode === "terminal") {
+          this.mode = "terminal";
+          this.printOutput("Switched to standard terminal mode.");
         } else {
-          this.printOutput("Invalid mode. Supported modes: terminal, eliza");
+          this.printOutput(`Invalid mode: ${mode}. Valid modes are: terminal, eliza`);
         }
       }
 
-      switchTheme(theme) {
-        if (theme === "list") {
-          this.printOutput(`Available themes: ${Object.keys(this.themes).join(", ")}`);
-        } else if (this.themes[theme]) {
-          document.body.style.setProperty("--bg-color", this.themes[theme].bg);
-          document.body.style.setProperty("--text-color", this.themes[theme].text);
-          this.printOutput(`Switched to ${theme} theme.`);
-        } else {
-          this.printOutput("Invalid theme. Use 'theme list' to see available themes.");
-        }
-      }
-
+      // Expandable for multiple conversation branches
       runEliza(input) {
-        let response;
-        if (input.includes("feel")) {
+        let response = "";
+        const low = input.toLowerCase();
+        if (low.includes("feel")) {
           response = this.getRandomResponse(this.elizaResponses.feelings);
-        } else if (input.includes("relationship") || input.includes("friend")) {
+        } else if (low.includes("relationship") || low.includes("friend")) {
           response = this.getRandomResponse(this.elizaResponses.relationships);
-        } else if (input.includes("work") || input.includes("job")) {
+        } else if (low.includes("work") || low.includes("job")) {
           response = this.getRandomResponse(this.elizaResponses.work);
+        } else if (low.includes("love") || low.includes("hate") || low.includes("like")) {
+          response = "Love and hate are powerful emotions. Tell me more about them.";
         } else {
           response = this.getRandomResponse(this.elizaResponses.default);
         }
         this.printOutput(`ELIZA: ${response}`);
       }
 
-      getRandomResponse(responses) {
-        return responses[Math.floor(Math.random() * responses.length)];
+      getRandomResponse(arrayOfResponses) {
+        return arrayOfResponses[Math.floor(Math.random() * arrayOfResponses.length)];
       }
 
+      // Expanding terminal commands
       runTerminal(command) {
+        // Check for blocked commands
         if (this.blockedCommands.some((blocked) => command.includes(blocked))) {
           this.printOutput(`Permission denied: executing '${command}' is not allowed.`);
-        } else if (command === "ls") {
-          this.printOutput("Desktop  Documents  Downloads  Music  Pictures  Videos");
-        } else if (command === "pwd") {
-          this.printOutput("/home/user");
-        } else if (command === "whoami") {
-          this.printOutput("user");
-        } else if (command === "uname -a") {
-          this.printOutput("Linux localhost 5.4.0-42-generic x86_64");
-        } else if (command === "date") {
-          this.printOutput(new Date().toString());
-        } else if (command === "df") {
-          this.printOutput("Filesystem     1K-blocks     Used Available Use% Mounted on\n/dev/sda1      488281250 100000000  388281250  20% /");
-        } else if (command === "uptime") {
-          this.printOutput(" 10:24:10 up 5 days,  4:52,  3 users,  load average: 0.00, 0.01, 0.05");
-        } else if (command === "cal") {
-          this.printOutput("     January 2025      \nSu Mo Tu We Th Fr Sa\n     1  2  3  4  5  6\n7  8  9 10 11 12 13");
-        } else if (command.startsWith("touch")) {
-          this.printOutput(`Created file: ${command.split(" ")[1]}`);
-        } else if (command.startsWith("mkdir")) {
-          this.printOutput(`Created directory: ${command.split(" ")[1]}`);
-        } else {
-          this.printOutput(`bash: ${command.split(" ")[0]}: command not found`);
+          return;
+        }
+
+        switch (true) {
+          case command === "help":
+            this.printOutput(
+              "Available Commands:\n" +
+              "  help                Display this help text\n" +
+              "  clear               Clear the terminal screen\n" +
+              "  history             Show command history\n" +
+              "  ls                  List files\n" +
+              "  pwd                 Print working directory\n" +
+              "  whoami              Display current user\n" +
+              "  uname -a            Display system information\n" +
+              "  date                Show current date/time\n" +
+              "  df                  Show disk usage info\n" +
+              "  uptime              Show system uptime\n" +
+              "  cal                 Show calendar\n" +
+              "  touch <file>        Create empty file\n" +
+              "  mkdir <dir>         Create directory\n" +
+              "  mode eliza          Switch to Eliza conversation mode\n" +
+              "  mode terminal       Switch to standard terminal mode\n" +
+              "  theme list          List available themes\n" +
+              "  theme <name>        Switch to specific theme\n" +
+              "  exit                Terminate this session"
+            );
+            break;
+
+          case command === "clear":
+            // Clear everything except the last input line
+            this.clearTerminal();
+            break;
+
+          case command === "history":
+            this.printOutput(this.commandHistory.join("\n"));
+            break;
+
+          case command === "ls":
+            this.printOutput("Desktop  Documents  Downloads  Music  Pictures  Videos");
+            break;
+
+          case command === "pwd":
+            this.printOutput("/home/user");
+            break;
+
+          case command === "whoami":
+            this.printOutput("user");
+            break;
+
+          case command === "uname -a":
+            this.printOutput("Linux localhost 5.4.0-42-generic x86_64");
+            break;
+
+          case command === "date":
+            this.printOutput(new Date().toString());
+            break;
+
+          case command === "df":
+            this.printOutput("Filesystem     1K-blocks     Used Available Use% Mounted on\n/dev/sda1      488281250 100000000  388281250  20% /");
+            break;
+
+          case command === "uptime":
+            this.printOutput(" 10:24:10 up 5 days,  4:52,  3 users,  load average: 0.00, 0.01, 0.05");
+            break;
+
+          case command === "cal":
+            // Example partial monthly calendar
+            this.printOutput(
+              "    January 2025   \n" +
+              "Su Mo Tu We Th Fr Sa\n" +
+              "      1  2  3  4\n" +
+              " 5  6  7  8  9 10 11\n" +
+              "12 13 14 15 16 17 18\n" +
+              "19 20 21 22 23 24 25\n" +
+              "26 27 28 29 30 31"
+            );
+            break;
+
+          case command.startsWith("touch"):
+            {
+              const fileName = command.split(" ")[1];
+              if (!fileName) {
+                this.printOutput("No file specified. Usage: touch <filename>");
+              } else {
+                this.printOutput(`Created file: ${fileName}`);
+              }
+            }
+            break;
+
+          case command.startsWith("mkdir"):
+            {
+              const dirName = command.split(" ")[1];
+              if (!dirName) {
+                this.printOutput("No directory specified. Usage: mkdir <dirname>");
+              } else {
+                this.printOutput(`Created directory: ${dirName}`);
+              }
+            }
+            break;
+
+          default:
+            this.printOutput(`bash: ${command.split(" ")[0]}: command not found`);
         }
       }
 
-      printOutput(output) {
+      // Clear output except for an optional welcome message
+      clearTerminal() {
+        // Remove all .output nodes except input-line
+        const children = Array.from(this.outputContainer.childNodes);
+        children.forEach((child) => {
+          if (child.id !== "input-line") {
+            this.outputContainer.removeChild(child);
+          }
+        });
+      }
+
+      // Switch to a theme, or list themes
+      switchTheme(themeName) {
+        if (themeName === "list") {
+          this.printOutput(`Available themes: ${Object.keys(this.themes).join(", ")}`);
+          return;
+        }
+
+        if (!this.themes[themeName]) {
+          this.printOutput(`Invalid theme. Use 'theme list' to see available themes.`);
+          return;
+        }
+
+        const { bg, text } = this.themes[themeName];
+        document.documentElement.style.setProperty("--bg-color", bg);
+        document.documentElement.style.setProperty("--text-color", text);
+
+        // You can tweak prompt/highlight color if desired
+        // e.g., set them relative to the main text color
+
+        this.printOutput(`Switched to ${themeName} theme.`);
+        // Save to localStorage for user preference
+        this.saveThemePreference(themeName);
+      }
+
+      // Store chosen theme in localStorage
+      saveThemePreference(themeName) {
+        try {
+          window.localStorage.setItem("preferredTheme", themeName);
+        } catch (e) {
+          // silently fail if localStorage is not available
+        }
+      }
+
+      // Load the last-used theme from localStorage if available
+      loadThemePreference() {
+        try {
+          const storedTheme = window.localStorage.getItem("preferredTheme");
+          if (storedTheme && this.themes[storedTheme]) {
+            this.switchTheme(storedTheme);
+          }
+        } catch (e) {
+          // do nothing
+        }
+      }
+
+      // Utility function to print output lines
+      printOutput(message) {
         const outputDiv = document.createElement("div");
         outputDiv.className = "output";
-        outputDiv.textContent = output;
-        this.outputElement.insertBefore(outputDiv, this.outputElement.lastChild);
-        this.outputElement.scrollTop = this.outputElement.scrollHeight;
+        outputDiv.textContent = message;
+        // Insert before the input line
+        this.outputContainer.insertBefore(outputDiv, document.getElementById("input-line"));
+        // Scroll to bottom
+        this.outputContainer.scrollTop = this.outputContainer.scrollHeight;
       }
     }
 
+    // Initialize Terminal instance
     const terminalElement = document.getElementById("terminal");
     const inputElement = document.getElementById("input");
     const promptElement = document.getElementById("prompt");
     const terminal = new Terminal(terminalElement, inputElement, promptElement);
 
+    // Theme switcher button logic
     document.getElementById("theme-switcher").addEventListener("click", () => {
+      // Present the user with a quick way to see theme list, for example
       terminal.switchTheme("list");
     });
   </script>
