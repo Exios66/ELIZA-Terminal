@@ -112,24 +112,46 @@
         this.outputContainer = outputContainer;
         this.inputField = inputField;
         this.promptElement = promptElement;
+        this.maxHistorySize = 100; // Limit history size
+        this.maxOutputLines = 1000; // Limit output lines
 
         // Current mode: "terminal" or "eliza"
         this.mode = "terminal";
 
         // Keep track of command history
-        this.commandHistory = [];
-        this.historyIndex = -1;
+        this.commandHistory = this.loadCommandHistory();
+        this.historyIndex = this.commandHistory.length;
 
         // Setup blocked or restricted commands
         this.blockedCommands = ["rm -rf /", "curl", "wget"];
 
-        // Define available themes
+        // Define available themes with transitions
         this.themes = {
-          classic:  { bg: "#000",      text: "#0f0" },
-          light:    { bg: "#fafafa",  text: "#111" },
-          dark:     { bg: "#111",      text: "#eee" },
-          matrix:   { bg: "#000",      text: "#00ff00" },
-          blue:     { bg: "#001f3f",   text: "#00aced" }
+          classic: { 
+            bg: "#000", 
+            text: "#0f0",
+            transition: "all 0.3s ease-in-out" 
+          },
+          light: { 
+            bg: "#fafafa", 
+            text: "#111",
+            transition: "all 0.3s ease-in-out" 
+          },
+          dark: { 
+            bg: "#111", 
+            text: "#eee",
+            transition: "all 0.3s ease-in-out" 
+          },
+          matrix: { 
+            bg: "#000", 
+            text: "#00ff00",
+            transition: "all 0.3s ease-in-out" 
+          },
+          blue: { 
+            bg: "#001f3f", 
+            text: "#00aced",
+            transition: "all 0.3s ease-in-out" 
+          }
         };
 
         // Setup the Eliza conversation logic
@@ -257,20 +279,45 @@
       }
 
       init() {
+        // Ensure input field always maintains focus
+        this.inputField.addEventListener("blur", () => {
+          setTimeout(() => this.inputField.focus(), 10);
+        });
+
+        // Handle paste events
+        this.inputField.addEventListener("paste", (event) => {
+          event.preventDefault();
+          const text = event.clipboardData.getData("text/plain");
+          const sanitizedText = this.sanitizeInput(text);
+          document.execCommand("insertText", false, sanitizedText);
+        });
+
+        // Enhanced keydown handling
         this.inputField.addEventListener("keydown", (event) => {
-          // Handle Enter
+          // Handle Enter with proper command deduplication
           if (event.key === "Enter") {
             const command = this.inputField.value.trim();
-            this.processCommand(command);
-            this.inputField.value = "";
-            this.commandHistory.push(command);
-            this.historyIndex = this.commandHistory.length;
+            if (command) {
+              // Don't add if it's the same as the last command
+              if (!this.commandHistory.length || 
+                  this.commandHistory[this.commandHistory.length - 1] !== command) {
+                this.addToHistory(command);
+              }
+              this.processCommand(command);
+              this.inputField.value = "";
+              this.historyIndex = this.commandHistory.length;
+            }
           }
-          // Handle arrow keys for command recall
+          // Enhanced arrow key navigation
           else if (event.key === "ArrowUp") {
             if (this.historyIndex > 0) {
               this.historyIndex--;
               this.inputField.value = this.commandHistory[this.historyIndex];
+              // Move cursor to end of input
+              setTimeout(() => {
+                this.inputField.selectionStart = this.inputField.value.length;
+                this.inputField.selectionEnd = this.inputField.value.length;
+              }, 0);
             }
             event.preventDefault();
           }
@@ -284,7 +331,126 @@
             }
             event.preventDefault();
           }
+          // Clear line with Ctrl+C
+          else if (event.key === "c" && event.ctrlKey) {
+            this.inputField.value = "";
+            this.printOutput("^C");
+            event.preventDefault();
+          }
         });
+
+        // Initialize theme switcher with transitions
+        const themeSwitcher = document.getElementById("theme-switcher");
+        themeSwitcher.addEventListener("click", () => {
+          this.showThemeMenu();
+        });
+      }
+
+      // New methods for improved UI handling
+      sanitizeInput(input) {
+        // Remove control characters and normalize whitespace
+        return input.replace(/[\x00-\x1F\x7F-\x9F]/g, "")
+                   .replace(/\s+/g, " ");
+      }
+
+      addToHistory(command) {
+        this.commandHistory.push(command);
+        // Maintain history size limit
+        if (this.commandHistory.length > this.maxHistorySize) {
+          this.commandHistory.shift();
+        }
+        this.saveCommandHistory();
+      }
+
+      saveCommandHistory() {
+        try {
+          localStorage.setItem("terminalHistory", 
+            JSON.stringify(this.commandHistory.slice(-this.maxHistorySize))
+          );
+        } catch (e) {
+          console.warn("Could not save command history:", e);
+        }
+      }
+
+      loadCommandHistory() {
+        try {
+          const saved = localStorage.getItem("terminalHistory");
+          return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+          console.warn("Could not load command history:", e);
+          return [];
+        }
+      }
+
+      showThemeMenu() {
+        const themeNames = Object.keys(this.themes);
+        const currentTheme = this.getCurrentTheme();
+        
+        let themeList = "Available themes:\n";
+        themeNames.forEach(name => {
+          themeList += `${name === currentTheme ? "* " : "  "}${name}\n`;
+        });
+        
+        this.printOutput(themeList);
+      }
+
+      getCurrentTheme() {
+        try {
+          return localStorage.getItem("preferredTheme") || "classic";
+        } catch (e) {
+          return "classic";
+        }
+      }
+
+      switchTheme(themeName) {
+        if (themeName === "list") {
+          this.showThemeMenu();
+          return;
+        }
+
+        if (!this.themes[themeName]) {
+          this.printOutput(`Invalid theme. Use 'theme list' to see available themes.`);
+          return;
+        }
+
+        const { bg, text, transition } = this.themes[themeName];
+        
+        // Apply transition
+        document.documentElement.style.transition = transition;
+        
+        // Apply theme
+        document.documentElement.style.setProperty("--bg-color", bg);
+        document.documentElement.style.setProperty("--text-color", text);
+        document.documentElement.style.setProperty("--prompt-color", text);
+
+        this.printOutput(`Switched to ${themeName} theme.`);
+        this.saveThemePreference(themeName);
+
+        // Reset transition after change
+        setTimeout(() => {
+          document.documentElement.style.transition = "";
+        }, 300);
+      }
+
+      // Store chosen theme in localStorage
+      saveThemePreference(themeName) {
+        try {
+          localStorage.setItem("preferredTheme", themeName);
+        } catch (e) {
+          // silently fail if localStorage is not available
+        }
+      }
+
+      // Load the last-used theme from localStorage if available
+      loadThemePreference() {
+        try {
+          const storedTheme = localStorage.getItem("preferredTheme");
+          if (storedTheme && this.themes[storedTheme]) {
+            this.switchTheme(storedTheme);
+          }
+        } catch (e) {
+          // do nothing
+        }
       }
 
       // Process each command
@@ -566,60 +732,30 @@
         });
       }
 
-      // Switch to a theme, or list themes
-      switchTheme(themeName) {
-        if (themeName === "list") {
-          this.printOutput(`Available themes: ${Object.keys(this.themes).join(", ")}`);
-          return;
-        }
-
-        if (!this.themes[themeName]) {
-          this.printOutput(`Invalid theme. Use 'theme list' to see available themes.`);
-          return;
-        }
-
-        const { bg, text } = this.themes[themeName];
-        document.documentElement.style.setProperty("--bg-color", bg);
-        document.documentElement.style.setProperty("--text-color", text);
-
-        // You can tweak prompt/highlight color if desired
-        // e.g., set them relative to the main text color
-
-        this.printOutput(`Switched to ${themeName} theme.`);
-        // Save to localStorage for user preference
-        this.saveThemePreference(themeName);
-      }
-
-      // Store chosen theme in localStorage
-      saveThemePreference(themeName) {
-        try {
-          window.localStorage.setItem("preferredTheme", themeName);
-        } catch (e) {
-          // silently fail if localStorage is not available
-        }
-      }
-
-      // Load the last-used theme from localStorage if available
-      loadThemePreference() {
-        try {
-          const storedTheme = window.localStorage.getItem("preferredTheme");
-          if (storedTheme && this.themes[storedTheme]) {
-            this.switchTheme(storedTheme);
-          }
-        } catch (e) {
-          // do nothing
-        }
-      }
-
-      // Utility function to print output lines
+      // Enhanced output management
       printOutput(message) {
         const outputDiv = document.createElement("div");
         outputDiv.className = "output";
         outputDiv.textContent = message;
+        
         // Insert before the input line
         this.outputContainer.insertBefore(outputDiv, document.getElementById("input-line"));
-        // Scroll to bottom
-        this.outputContainer.scrollTop = this.outputContainer.scrollHeight;
+        
+        // Limit number of output lines
+        this.pruneOutput();
+        
+        // Smooth scroll to bottom
+        this.outputContainer.scrollTo({
+          top: this.outputContainer.scrollHeight,
+          behavior: "smooth"
+        });
+      }
+
+      pruneOutput() {
+        const outputs = this.outputContainer.getElementsByClassName("output");
+        while (outputs.length > this.maxOutputLines) {
+          outputs[0].remove();
+        }
       }
     }
 
@@ -628,12 +764,6 @@
     const inputElement = document.getElementById("input");
     const promptElement = document.getElementById("prompt");
     const terminal = new Terminal(terminalElement, inputElement, promptElement);
-
-    // Theme switcher button logic
-    document.getElementById("theme-switcher").addEventListener("click", () => {
-      // Present the user with a quick way to see theme list, for example
-      terminal.switchTheme("list");
-    });
   </script>
 </body>
 </html>
