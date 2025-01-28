@@ -63,6 +63,7 @@
       padding: 8px 12px;
       cursor: pointer;
       border: 1px solid var(--prompt-color);
+      -webkit-user-select: none;
       user-select: none;
       font-size: 0.9rem;
     }
@@ -95,7 +96,8 @@
     </div>
     <div id="input-line">
       <span id="prompt">$</span>
-      <input id="input" type="text" autocomplete="off" autofocus />
+      <label for="input" class="visually-hidden">Command Input</label>
+      <input id="input" type="text" autocomplete="off" autofocus placeholder="Type your command here" />
     </div>
   </div>
 
