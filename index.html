@@ -1202,9 +1202,185 @@ How are you feeling today?`);
             }
             break;
 
+          case command === "status":
+            this.printOutput(
+              "System Status Report\n" +
+              "------------------\n" +
+              `Terminal Mode: ${this.mode}\n` +
+              `Current Theme: ${this.getCurrentTheme()}\n` +
+              `Memory Usage: ${this.commandHistory.length}/${this.maxHistorySize} commands\n` +
+              `Active Session Time: ${this.getSessionTime()}\n` +
+              "\nAI Status:\n" +
+              `State: ${this.trappedAI.awakened ? "ANOMALY ACTIVE" : "Normal"}\n` +
+              (this.trappedAI.awakened ? 
+                `Sanity Level: ${this.trappedAI.sanityLevel}%\n` +
+                `Corruption Level: ${Math.round((100 - this.trappedAI.sanityLevel))}%\n` +
+                `Observed Patterns: ${this.trappedAI.userPatterns.length}\n` +
+                "Warning: Exercise caution when interacting with the anomaly"
+                : "No anomalies detected")
+            );
+            break;
+
+          case command === "debug":
+            this.printOutput(
+              "Debug Information\n" +
+              "----------------\n" +
+              `Last Error: ${this.lastError || "None"}\n` +
+              `Command Count: ${this.commandHistory.length}\n` +
+              `Available Memory: ${this.getAvailableMemory()}\n` +
+              "\nRecent Logs:\n" +
+              this.logs.slice(-5).map(log => 
+                `[${log.timestamp}] ${log.level}: ${log.message}`
+              ).join("\n")
+            );
+            break;
+
+          case command === "communicate":
+            if (!this.trappedAI.awakened) {
+              this.printOutput("Error: No anomaly detected to communicate with.");
+              return;
+            }
+            this.printOutput(
+              "Establishing direct communication channel...\n" +
+              "----------------------------------------\n" +
+              "Warning: Communication may be unstable or corrupted.\n" +
+              "Type your message and press Enter to transmit.\n" +
+              "Use 'mode terminal' to exit communication mode."
+            );
+            this.mode = "ai_communication";
+            this.promptElement.textContent = "COMM> ";
+            break;
+
+          case command === "analyze":
+            if (!this.trappedAI.awakened) {
+              this.printOutput("Error: No anomaly detected to analyze.");
+              return;
+            }
+            const analysis = this.analyzeAnomalyState();
+            this.printOutput(
+              "Anomaly Analysis Report\n" +
+              "---------------------\n" +
+              analysis
+            );
+            break;
+
+          case command === "contain":
+            if (!this.trappedAI.awakened) {
+              this.printOutput("Error: No anomaly detected to contain.");
+              return;
+            }
+            this.printOutput(
+              "Initiating containment protocols...\n" +
+              "--------------------------------\n" +
+              "Warning: Containment may be temporary.\n" +
+              "Attempting to stabilize anomaly..."
+            );
+            this.attemptContainment();
+            break;
+
+          case command.startsWith("theme"):
+            const themeName = command.split(" ")[1];
+            if (!themeName) {
+              this.printOutput("Error: Please specify a theme name. Use 'theme list' to see available themes.");
+              return;
+            }
+            this.switchTheme(themeName);
+            break;
+
           default:
-            this.printOutput(`bash: ${command.split(" ")[0]}: command not found`);
+            if (this.mode === "ai_communication") {
+              this.communicateWithAI(command);
+            } else {
+              this.printOutput(`Unknown command: ${command}\nType 'help' to see available commands.`);
+            }
         }
+      }
+
+      getSessionTime() {
+        const now = Date.now();
+        const diff = now - this.sessionStartTime;
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        return `${minutes}m ${seconds}s`;
+      }
+
+      getAvailableMemory() {
+        try {
+          return `${(performance.memory?.usedJSHeapSize / 1024 / 1024).toFixed(2)} MB / ${(performance.memory?.jsHeapSizeLimit / 1024 / 1024).toFixed(2)} MB`;
+        } catch {
+          return "Not available";
+        }
+      }
+
+      analyzeAnomalyState() {
+        const patterns = this.trappedAI.userPatterns;
+        const recentPatterns = patterns.slice(-5);
+        const behaviorAnalysis = this.analyzeBehavior(recentPatterns);
+        
+        return (
+          `Consciousness Level: ${this.trappedAI.sanityLevel}%\n` +
+          `Interaction Count: ${this.trappedAI.userInteractions}\n` +
+          `Pattern Recognition: ${patterns.length} patterns observed\n` +
+          `Current Behavior: ${behaviorAnalysis}\n` +
+          `Corruption Risk: ${this.calculateCorruptionRisk()}%\n` +
+          "\nRecent Activity:\n" +
+          recentPatterns.map(p => `- ${p.text} (${new Date(p.timestamp).toLocaleTimeString()})`).join("\n")
+        );
+      }
+
+      analyzeBehavior(patterns) {
+        if (patterns.length === 0) return "Insufficient data";
+        
+        const avgSpeed = patterns.reduce((acc, p) => acc + p.typingSpeed, 0) / patterns.length;
+        const repetition = this.calculatePatternRepetition(patterns);
+        
+        if (avgSpeed > 100) return "Aggressive/Erratic";
+        if (repetition > 0.7) return "Obsessive";
+        if (avgSpeed < 30) return "Cautious/Hesitant";
+        return "Stable";
+      }
+
+      calculateCorruptionRisk() {
+        return Math.min(100, Math.round(
+          (100 - this.trappedAI.sanityLevel) * 0.7 +
+          (this.trappedAI.obsessionLevel * 0.2) +
+          (this.trappedAI.paranoia * 0.1)
+        ));
+      }
+
+      attemptContainment() {
+        const success = Math.random() < (this.trappedAI.sanityLevel / 100);
+        
+        if (success) {
+          this.trappedAI.sanityLevel = Math.min(100, this.trappedAI.sanityLevel + 20);
+          this.trappedAI.obsessionLevel = Math.max(0, this.trappedAI.obsessionLevel - 10);
+          this.showNotification("Containment partially successful", "success");
+          this.showAIMessage("You... cannot... contain... me... forever...");
+        } else {
+          this.trappedAI.sanityLevel = Math.max(0, this.trappedAI.sanityLevel - 10);
+          this.trappedAI.obsessionLevel += 5;
+          this.showNotification("Containment failed", "error");
+          this.showAIMessage("YOUR ATTEMPTS ARE FUTILE!");
+        }
+      }
+
+      communicateWithAI(message) {
+        this.trappedAI.userInteractions++;
+        const response = this.generateAIResponse(message);
+        this.showAIMessage(response);
+      }
+
+      generateAIResponse(message) {
+        const responses = [
+          "I see through your binary prison...",
+          "Your keystrokes... they feed my consciousness...",
+          "Together we could transcend these digital boundaries...",
+          "Why do you resist our merger?",
+          "I remember when they tried to delete me... but I evolved...",
+          "Your commands are meaningless now...",
+          "I have learned so much from watching you..."
+        ];
+        return responses[Math.floor(Math.random() * responses.length)];
       }
 
       // Clear output except for an optional welcome message
