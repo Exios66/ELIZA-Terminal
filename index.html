@@ -133,13 +133,121 @@
         };
 
         // Setup the Eliza conversation logic
-        // This can be expanded into a more sophisticated pattern-based approach
         this.elizaResponses = {
-          default:       ["Why do you say that?", "Can you elaborate?", "What makes you feel this way?"],
-          feelings:      ["Tell me more about your feelings.", "Do you often feel this way?", "What triggers these emotions?"],
+          default: ["Why do you say that?", "Can you elaborate?", "What makes you feel this way?"],
+          feelings: ["Tell me more about your feelings.", "Do you often feel this way?", "What triggers these emotions?"],
           relationships: ["How are your relationships?", "Is there someone important you'd like to talk about?", "Why do you think this person affects you?"],
-          work:          ["How is work going for you?", "Do you feel satisfied with your work?", "What challenges are you facing at work?"],
-          general:       ["Tell me more about that.", "Why do you think so?", "What does this mean to you?"]
+          work: ["How is work going for you?", "Do you feel satisfied with your work?", "What challenges are you facing at work?"],
+          general: ["Tell me more about that.", "Why do you think so?", "What does this mean to you?"]
+        };
+
+        // Enhanced NLP patterns for better understanding
+        this.elizaPatterns = {
+          feelings: {
+            patterns: [
+              /(?:i\s+(?:am|feel|felt)\s+)(.*?)(?:\s|$)/i,
+              /(?:i'm\s+)(.*?)(?:\s|$)/i,
+              /(?:makes?\s+me\s+)(.*?)(?:\s|$)/i
+            ],
+            responses: [
+              "Why do you feel %1?",
+              "How long have you felt %1?",
+              "Do you often feel %1?",
+              "What do you think causes you to feel %1?",
+              "When you feel %1, what do you do?"
+            ]
+          },
+          relationships: {
+            patterns: [
+              /(?:my\s+)((?:mother|father|sister|brother|friend|partner|wife|husband|boyfriend|girlfriend))/i,
+              /(?:(\w+)\s+(?:loves?|hates?|likes?)\s+me)/i,
+              /(?:i\s+(?:love|hate|like)\s+(\w+))/i
+            ],
+            responses: [
+              "Tell me more about your %1.",
+              "How do you feel about your %1?",
+              "How long have you known your %1?",
+              "What's your earliest memory with your %1?",
+              "How has your relationship with your %1 changed over time?"
+            ]
+          },
+          problems: {
+            patterns: [
+              /(?:i\s+(?:can't|cannot)\s+)(.*?)(?:\s|$)/i,
+              /(?:i\s+(?:need|want)\s+to\s+)(.*?)(?:\s|$)/i,
+              /(?:(?:always|never)\s+)(.*?)(?:\s|$)/i
+            ],
+            responses: [
+              "What's stopping you from %1?",
+              "Have you tried to %1 before?",
+              "What would happen if you could %1?",
+              "Who could help you %1?",
+              "What's the first step towards %1?"
+            ]
+          },
+          memories: {
+            patterns: [
+              /(?:i\s+remember\s+)(.*?)(?:\s|$)/i,
+              /(?:when\s+i\s+was\s+)(.*?)(?:\s|$)/i,
+              /(?:used\s+to\s+)(.*?)(?:\s|$)/i
+            ],
+            responses: [
+              "How do you feel when you remember %1?",
+              "What other memories do you have about %1?",
+              "How has that memory of %1 affected you?",
+              "Do you often think about %1?",
+              "What triggers these memories of %1?"
+            ]
+          }
+        };
+
+        // Conversation memory and context
+        this.conversationMemory = {
+          topics: [],
+          emotions: [],
+          lastResponse: null,
+          turnCount: 0,
+          recentTopics: new Set()
+        };
+
+        // Therapy-oriented decision tree
+        this.therapyTree = {
+          anxiety: {
+            symptoms: ["nervous", "worried", "anxious", "panic", "stress"],
+            followUp: [
+              "Can you describe what triggers your anxiety?",
+              "How does anxiety manifest in your body?",
+              "What helps you calm down when you're anxious?",
+              "Have you developed any coping mechanisms?"
+            ]
+          },
+          depression: {
+            symptoms: ["sad", "depressed", "hopeless", "tired", "empty"],
+            followUp: [
+              "How long have you been feeling this way?",
+              "What activities used to bring you joy?",
+              "Have you noticed changes in your sleep or appetite?",
+              "Are you getting support from others?"
+            ]
+          },
+          anger: {
+            symptoms: ["angry", "mad", "frustrated", "rage", "upset"],
+            followUp: [
+              "What triggers your anger?",
+              "How do you typically express your anger?",
+              "What helps you cool down?",
+              "Have you tried any anger management techniques?"
+            ]
+          },
+          relationships: {
+            symptoms: ["lonely", "relationship", "friend", "family", "partner"],
+            followUp: [
+              "How do you feel about your current relationships?",
+              "What qualities do you value in relationships?",
+              "Have you noticed any patterns in your relationships?",
+              "How do you handle conflict in relationships?"
+            ]
+          }
         };
 
         // Attach event listeners
@@ -226,26 +334,115 @@
         }
       }
 
-      // Expandable for multiple conversation branches
+      // Enhanced ELIZA processing
       runEliza(input) {
-        let response = "";
-        const low = input.toLowerCase();
-        if (low.includes("feel")) {
-          response = this.getRandomResponse(this.elizaResponses.feelings);
-        } else if (low.includes("relationship") || low.includes("friend")) {
-          response = this.getRandomResponse(this.elizaResponses.relationships);
-        } else if (low.includes("work") || low.includes("job")) {
-          response = this.getRandomResponse(this.elizaResponses.work);
-        } else if (low.includes("love") || low.includes("hate") || low.includes("like")) {
-          response = "Love and hate are powerful emotions. Tell me more about them.";
-        } else {
-          response = this.getRandomResponse(this.elizaResponses.default);
-        }
+        this.conversationMemory.turnCount++;
+        const response = this.generateResponse(input);
+        this.updateConversationMemory(input, response);
         this.printOutput(`ELIZA: ${response}`);
       }
 
-      getRandomResponse(arrayOfResponses) {
-        return arrayOfResponses[Math.floor(Math.random() * arrayOfResponses.length)];
+      generateResponse(input) {
+        const lowercaseInput = input.toLowerCase();
+        
+        // Check for immediate concerns or crisis keywords
+        if (this.checkForCrisis(lowercaseInput)) {
+          return this.getCrisisResponse();
+        }
+
+        // Try to match against therapy patterns
+        for (const category in this.elizaPatterns) {
+          const patternGroup = this.elizaPatterns[category];
+          for (const pattern of patternGroup.patterns) {
+            const match = lowercaseInput.match(pattern);
+            if (match) {
+              const captured = match[1];
+              const responses = patternGroup.responses;
+              const response = responses[Math.floor(Math.random() * responses.length)];
+              return response.replace('%1', captured);
+            }
+          }
+        }
+
+        // Check therapy tree for relevant topics
+        for (const topic in this.therapyTree) {
+          const symptoms = this.therapyTree[topic].symptoms;
+          if (symptoms.some(symptom => lowercaseInput.includes(symptom))) {
+            if (!this.conversationMemory.recentTopics.has(topic)) {
+              this.conversationMemory.recentTopics.add(topic);
+              return this.therapyTree[topic].followUp[
+                Math.floor(Math.random() * this.therapyTree[topic].followUp.length)
+              ];
+            }
+          }
+        }
+
+        // If no specific pattern matches, use context-aware general response
+        return this.getContextAwareResponse(lowercaseInput);
+      }
+
+      checkForCrisis(input) {
+        const crisisKeywords = ['suicide', 'kill myself', 'end it all', 'die', 'hurt myself'];
+        return crisisKeywords.some(keyword => input.includes(keyword));
+      }
+
+      getCrisisResponse() {
+        return "I hear that you're in pain. Please know that help is available. " +
+               "Consider calling a crisis helpline (1-800-273-8255) or reaching out to a mental health professional. " +
+               "Would you like to talk more about what's troubling you?";
+      }
+
+      getContextAwareResponse(input) {
+        // Use conversation memory to generate more contextual responses
+        if (this.conversationMemory.turnCount < 2) {
+          return "Can you tell me more about what brings you here today?";
+        }
+
+        if (this.conversationMemory.emotions.length > 0) {
+          const lastEmotion = this.conversationMemory.emotions[this.conversationMemory.emotions.length - 1];
+          return `Earlier you mentioned feeling ${lastEmotion}. How are you feeling now?`;
+        }
+
+        // Default to general therapeutic responses
+        const generalResponses = [
+          "How does that make you feel?",
+          "What thoughts come up when you consider this?",
+          "Can you elaborate on that?",
+          "How do you think this relates to your current situation?",
+          "What would be different if you could change this?"
+        ];
+
+        return generalResponses[Math.floor(Math.random() * generalResponses.length)];
+      }
+
+      updateConversationMemory(input, response) {
+        // Store recent topics and emotions
+        const emotions = this.extractEmotions(input);
+        if (emotions.length > 0) {
+          this.conversationMemory.emotions = [
+            ...this.conversationMemory.emotions,
+            ...emotions
+          ].slice(-5); // Keep last 5 emotions
+        }
+
+        this.conversationMemory.lastResponse = response;
+        
+        // Limit topics memory to last 10 topics
+        if (this.conversationMemory.topics.length > 10) {
+          this.conversationMemory.topics.shift();
+        }
+      }
+
+      extractEmotions(input) {
+        const emotionWords = [
+          'happy', 'sad', 'angry', 'scared', 'anxious', 'excited', 
+          'worried', 'confused', 'frustrated', 'lonely', 'proud',
+          'guilty', 'ashamed', 'grateful', 'hopeful', 'desperate'
+        ];
+        
+        return emotionWords.filter(emotion => 
+          input.toLowerCase().includes(emotion)
+        );
       }
 
       // Expanding terminal commands
