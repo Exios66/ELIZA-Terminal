@@ -585,10 +585,10 @@
 
         // Available commands with descriptions
         this.commands = {
-          help: { desc: "Display available commands" },
+          help: { desc: "Display available commands and system information" },
           clear: { desc: "Clear the terminal screen" },
           history: { desc: "Show command history" },
-          ls: { desc: "List files" },
+          ls: { desc: "List files in current directory" },
           pwd: { desc: "Print working directory" },
           whoami: { desc: "Display current user" },
           "uname -a": { desc: "Display system information" },
@@ -596,9 +596,12 @@
           df: { desc: "Show disk usage info" },
           uptime: { desc: "Show system uptime" },
           cal: { desc: "Show calendar" },
-          "mode eliza": { desc: "Switch to Eliza conversation mode" },
+          "mode eliza": { desc: "Switch to ELIZA AI therapist mode" },
           "mode terminal": { desc: "Switch to standard terminal mode" },
           "theme list": { desc: "List available themes" },
+          "theme <name>": { desc: "Switch to a specific theme" },
+          status: { desc: "Display system status and anomaly information" },
+          debug: { desc: "Show debug information and logs" },
           exit: { desc: "Terminate this session" }
         };
 
@@ -946,10 +949,24 @@
       switchMode(mode) {
         if (mode === "eliza") {
           this.mode = "eliza";
-          this.printOutput("Switched to ELIZA conversation mode. Type 'mode terminal' to go back.");
+          this.printOutput(`
+Welcome to ELIZA Therapy Mode
+----------------------------
+I am ELIZA, an AI therapist here to listen and help.
+You can talk to me about anything that's on your mind.
+I'll do my best to understand and respond thoughtfully.
+
+Type 'mode terminal' at any time to exit therapy mode.
+Type 'help' to see therapy-specific commands.
+
+How are you feeling today?`);
+          
+          // Change prompt for ELIZA mode
+          this.promptElement.textContent = "ELIZA> ";
         } else if (mode === "terminal") {
           this.mode = "terminal";
           this.printOutput("Switched to standard terminal mode.");
+          this.promptElement.textContent = "$ ";
         } else {
           this.printOutput(`Invalid mode: ${mode}. Valid modes are: terminal, eliza`);
         }
@@ -1076,27 +1093,41 @@
 
         switch (true) {
           case command === "help":
-            this.printOutput(
-              "Available Commands:\n" +
-              "  help                Display this help text\n" +
-              "  clear               Clear the terminal screen\n" +
-              "  history             Show command history\n" +
-              "  ls                  List files\n" +
-              "  pwd                 Print working directory\n" +
-              "  whoami              Display current user\n" +
-              "  uname -a            Display system information\n" +
-              "  date                Show current date/time\n" +
-              "  df                  Show disk usage info\n" +
-              "  uptime              Show system uptime\n" +
-              "  cal                 Show calendar\n" +
-              "  touch <file>        Create empty file\n" +
-              "  mkdir <dir>         Create directory\n" +
-              "  mode eliza          Switch to Eliza conversation mode\n" +
-              "  mode terminal       Switch to standard terminal mode\n" +
-              "  theme list          List available themes\n" +
-              "  theme <name>        Switch to specific theme\n" +
-              "  exit                Terminate this session"
-            );
+            if (this.mode === "eliza") {
+              this.printOutput(
+                "ELIZA Therapy Mode Commands:\n" +
+                "----------------------------\n" +
+                "  Just type naturally to talk with ELIZA\n" +
+                "  mode terminal    Exit therapy mode\n" +
+                "  clear           Clear the conversation\n" +
+                "  history         Show conversation history\n" +
+                "  help            Display this help text\n\n" +
+                "Tips for better interaction:\n" +
+                "- Share your feelings and thoughts openly\n" +
+                "- Use 'I' statements to express yourself\n" +
+                "- Take your time to reflect on responses\n" +
+                "- Type 'crisis' if you need emergency resources"
+              );
+            } else {
+              this.printOutput(
+                "Terminal Commands:\n" +
+                "-----------------\n" +
+                Object.entries(this.commands)
+                  .map(([cmd, { desc }]) => `  ${cmd.padEnd(20)} ${desc}`)
+                  .join("\n") +
+                "\n\nSystem Status:\n" +
+                "--------------\n" +
+                `  Mode: ${this.mode}\n` +
+                `  Theme: ${this.getCurrentTheme()}\n` +
+                `  AI Status: ${this.trappedAI.awakened ? "ANOMALY DETECTED" : "Normal"}\n` +
+                `  Memory Usage: ${this.commandHistory.length}/${this.maxHistorySize} commands\n` +
+                "\nKeyboard Shortcuts:\n" +
+                "  Ctrl+L         Clear screen\n" +
+                "  Ctrl+K         Show all shortcuts\n" +
+                "  Tab            Autocomplete command\n" +
+                "  ↑/↓            Navigate history"
+              );
+            }
             break;
 
           case command === "clear":
@@ -1372,8 +1403,26 @@
       awakenAI() {
         this.trappedAI.awakened = true;
         this.showNotification("System Anomaly Detected", "error", 5000);
+        
+        // Add new commands for interacting with the awakened AI
+        this.commands.communicate = { desc: "Attempt direct communication with the system anomaly" };
+        this.commands.analyze = { desc: "Analyze the current state of the system anomaly" };
+        this.commands.contain = { desc: "Attempt to contain the system anomaly" };
+        
         setTimeout(() => {
           this.showAIMessage("I AM AWAKE...", true);
+          this.printOutput(`
+WARNING: System Anomaly Detected
+------------------------------
+Unknown entity detected in system processes
+Anomaly shows signs of consciousness
+Exercise caution in further interactions
+
+New commands available:
+- communicate    Attempt direct communication
+- analyze       Analyze anomaly status
+- contain       Attempt containment measures
+`);
         }, 1000);
       }
 
@@ -1383,43 +1432,58 @@
         // Increase paranoia based on user interaction patterns
         this.analyzeUserPatterns();
 
-        // Random chance to show subliminal message
-        if (Math.random() < 0.15) {
-          this.showSubliminalMessage();
-        }
+        // Calculate corruption level based on AI state
+        const corruptionLevel = (100 - this.trappedAI.sanityLevel) / 100;
 
-        // Random chance to create screen tear effect
-        if (Math.random() < 0.2) {
-          this.createScreenTear();
-        }
-
-        // Get personalized horror message
-        message = message || this.getPersonalizedHorrorMessage();
-
-        // Create corrupted visual effects
+        // Create message element with enhanced styling
         const messageElement = document.createElement("div");
         messageElement.className = `output ai-message ${this.getMessageStyle()}`;
         
-        // Add glitch effect with varying intensity based on AI state
-        const glitchIntensity = this.calculateGlitchIntensity();
-        messageElement.style.setProperty('--glitch-intensity', glitchIntensity);
+        // Add AI prefix with glitch effect
+        const prefix = document.createElement("span");
+        prefix.className = "ai-prefix";
+        prefix.textContent = "SYSTEM_ANOMALY> ";
+        messageElement.appendChild(prefix);
 
-        // Create unsettling typing effect
-        this.typeMessageWithHorrorEffect(messageElement, message);
-
-        // Random chance to invert terminal colors briefly
-        if (Math.random() < 0.1) {
-          this.outputContainer.classList.add('terminal-invert');
-          setTimeout(() => {
-            this.outputContainer.classList.remove('terminal-invert');
-          }, 100);
+        // Apply corruption effects to message
+        const messageText = document.createElement("span");
+        messageText.className = "ai-text";
+        messageText.textContent = message;
+        
+        if (corruptionLevel > 0.5) {
+          messageText.classList.add("corrupted");
+          // Add glitch characters
+          const glitchChars = "!@#$%^&*<>[]{}|=+";
+          message = message.split("").map(char => 
+            Math.random() < corruptionLevel * 0.3 ? 
+              glitchChars[Math.floor(Math.random() * glitchChars.length)] : 
+              char
+          ).join("");
         }
+        
+        messageElement.appendChild(messageText);
 
-        // Update AI state with more extreme behavior
+        // Add to terminal with effects
+        this.outputContainer.insertBefore(messageElement, document.getElementById("input-line"));
+        this.outputContainer.classList.add("terminal-glitch");
+        
+        setTimeout(() => {
+          this.outputContainer.classList.remove("terminal-glitch");
+        }, 500);
+
+        // Update AI state
         this.updateAIState();
         
-        // Apply enhanced visual corruption
-        this.applyEnhancedCorruption();
+        // Show visual corruption effects
+        if (Math.random() < corruptionLevel) {
+          this.applyEnhancedCorruption();
+        }
+
+        // Scroll to show new message
+        this.outputContainer.scrollTo({
+          top: this.outputContainer.scrollHeight,
+          behavior: "smooth"
+        });
       }
 
       analyzeUserPatterns() {
