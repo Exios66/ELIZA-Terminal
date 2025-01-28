@@ -73,6 +73,82 @@
       display: none;
     }
 
+    /* Status notification styles */
+    .status-notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--highlight-color);
+      color: var(--text-color);
+      padding: 12px 20px;
+      border-radius: 4px;
+      border: 1px solid var(--text-color);
+      font-size: 0.9rem;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 1000;
+      max-width: 300px;
+    }
+
+    .status-notification.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .status-notification.error {
+      background: #ff000033;
+      border-color: #ff0000;
+    }
+
+    .status-notification.success {
+      background: #00ff0033;
+      border-color: #00ff00;
+    }
+
+    /* Accessibility improvements */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    .command-status {
+      font-style: italic;
+      color: var(--text-color);
+      opacity: 0.8;
+      margin-left: 10px;
+    }
+
+    /* Focus indicators */
+    #input:focus {
+      box-shadow: 0 0 0 2px var(--text-color);
+      border-radius: 2px;
+    }
+
+    .theme-switcher:focus {
+      outline: 2px solid var(--text-color);
+      outline-offset: 2px;
+    }
+
+    /* Screen reader only text */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     /* Basic scroll styling */
     ::-webkit-scrollbar {
       width: 8px;
@@ -340,6 +416,31 @@
         // Track current suggestion selection
         this.selectedSuggestionIndex = -1;
 
+        // Add status notification container
+        this.statusNotification = document.createElement('div');
+        this.statusNotification.className = 'status-notification';
+        document.body.appendChild(this.statusNotification);
+
+        // Add ARIA live region for status updates
+        this.ariaLiveRegion = document.createElement('div');
+        this.ariaLiveRegion.className = 'sr-only';
+        this.ariaLiveRegion.setAttribute('aria-live', 'polite');
+        document.body.appendChild(this.ariaLiveRegion);
+
+        // Initialize logging system
+        this.logs = [];
+        this.maxLogs = 1000;
+
+        // Add keyboard shortcut help
+        this.keyboardShortcuts = {
+          'Enter': 'Execute command',
+          'Tab': 'Complete command',
+          'Arrow Up/Down': 'Navigate history or suggestions',
+          'Ctrl+L': 'Clear terminal',
+          'Ctrl+C': 'Cancel current command',
+          'Escape': 'Close suggestions'
+        };
+
         // Attach event listeners
         this.init();
         // Load user theme preference if stored
@@ -403,6 +504,17 @@
           else if (event.key === "Escape") {
             this.suggestionsDropdown.classList.remove('active');
           }
+          // Show keyboard shortcuts with Ctrl+K
+          else if (event.key === "k" && event.ctrlKey) {
+            event.preventDefault();
+            this.showKeyboardShortcuts();
+          }
+          // Clear terminal with Ctrl+L
+          else if (event.key === "l" && event.ctrlKey) {
+            event.preventDefault();
+            this.clearTerminal();
+            this.showNotification('Terminal cleared', 'success');
+          }
         });
 
         // Input event for real-time suggestions
@@ -423,6 +535,13 @@
         themeSwitcher.addEventListener("click", () => {
           this.showThemeMenu();
         });
+
+        // Add aria-label to input field
+        this.inputField.setAttribute('aria-label', 'Terminal command input');
+        
+        // Add role and aria-label to terminal container
+        this.outputContainer.setAttribute('role', 'log');
+        this.outputContainer.setAttribute('aria-label', 'Terminal output');
       }
 
       // New methods for improved UI handling
@@ -535,36 +654,51 @@
       // Process each command
       processCommand(command) {
         if (!command) return;
+        
+        this.log('info', `Executing command: ${command}`);
         this.printOutput(`$ ${command}`);
 
-        // Global exit command
-        if (command === "exit") {
-          this.printOutput("Session terminated. Refresh to start anew.");
-          return;
-        }
+        try {
+          // Global exit command
+          if (command === "exit") {
+            this.showNotification('Session terminated', 'info');
+            this.printOutput("Session terminated. Refresh to start anew.");
+            return;
+          }
 
-        // Switch modes
-        if (command.startsWith("mode ")) {
-          const [, modeName] = command.split(" ");
-          this.switchMode(modeName);
-          return;
-        }
+          // Show logs command
+          if (command === "logs") {
+            this.showLogs();
+            return;
+          }
 
-        // Switch themes
-        if (command.startsWith("theme ")) {
-          const [, themeName] = command.split(" ");
-          this.switchTheme(themeName);
-          return;
-        }
+          // Switch modes
+          if (command.startsWith("mode ")) {
+            const [, modeName] = command.split(" ");
+            this.switchMode(modeName);
+            return;
+          }
 
-        // In Eliza mode, handle conversation
-        if (this.mode === "eliza") {
-          this.runEliza(command);
-          return;
-        }
+          // Switch themes
+          if (command.startsWith("theme ")) {
+            const [, themeName] = command.split(" ");
+            this.switchTheme(themeName);
+            return;
+          }
 
-        // If normal terminal mode, parse terminal commands
-        this.runTerminal(command);
+          // In Eliza mode, handle conversation
+          if (this.mode === "eliza") {
+            this.runEliza(command);
+            return;
+          }
+
+          // If normal terminal mode, parse terminal commands
+          this.runTerminal(command);
+
+        } catch (error) {
+          this.log('error', 'Command execution failed', { command, error });
+          this.showNotification(`Error: ${error.message}`, 'error');
+        }
       }
 
       switchMode(mode) {
@@ -817,11 +951,18 @@
         outputDiv.className = "output";
         outputDiv.textContent = message;
         
+        // Add ARIA role and label
+        outputDiv.setAttribute('role', 'log');
+        outputDiv.setAttribute('aria-label', 'Command output');
+        
         // Insert before the input line
         this.outputContainer.insertBefore(outputDiv, document.getElementById("input-line"));
         
         // Limit number of output lines
         this.pruneOutput();
+        
+        // Log the output
+        this.log('info', 'Output printed', { message });
         
         // Smooth scroll to bottom
         this.outputContainer.scrollTo({
@@ -914,6 +1055,60 @@
           this.inputField.value = suggestions[this.selectedSuggestionIndex].dataset.command;
           this.suggestionsDropdown.classList.remove('active');
         }
+      }
+
+      showKeyboardShortcuts() {
+        let shortcuts = "Keyboard Shortcuts:\n";
+        for (const [key, description] of Object.entries(this.keyboardShortcuts)) {
+          shortcuts += `${key}: ${description}\n`;
+        }
+        this.printOutput(shortcuts);
+        this.log('info', 'Displayed keyboard shortcuts');
+      }
+
+      showNotification(message, type = 'info', duration = 3000) {
+        this.statusNotification.textContent = message;
+        this.statusNotification.className = `status-notification ${type}`;
+        this.statusNotification.classList.add('active');
+        
+        // Update ARIA live region
+        this.ariaLiveRegion.textContent = message;
+
+        // Log the notification
+        this.log(type, message);
+
+        setTimeout(() => {
+          this.statusNotification.classList.remove('active');
+        }, duration);
+      }
+
+      log(level, message, details = {}) {
+        const logEntry = {
+          timestamp: new Date().toISOString(),
+          level,
+          message,
+          details
+        };
+
+        this.logs.push(logEntry);
+        
+        // Trim logs if they exceed max size
+        if (this.logs.length > this.maxLogs) {
+          this.logs = this.logs.slice(-this.maxLogs);
+        }
+
+        // Log to console in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[${level.toUpperCase()}] ${message}`, details);
+        }
+      }
+
+      showLogs() {
+        const logOutput = this.logs
+          .map(log => `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`)
+          .join('\n');
+        
+        this.printOutput(logOutput);
       }
     }
 
