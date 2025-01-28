@@ -314,6 +314,88 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    /* Enhanced horror effects */
+    @keyframes text-corruption {
+      0% { text-shadow: 0 0 2px #ff0000; }
+      25% { text-shadow: 2px 0 2px #ff0000, -2px 0 2px #00ff00; }
+      50% { text-shadow: -2px 0 2px #ff0000, 2px 0 2px #0000ff; }
+      75% { text-shadow: 0 -2px 2px #ff0000, 0 2px 2px #ff00ff; }
+      100% { text-shadow: 0 0 2px #ff0000; }
+    }
+
+    @keyframes flicker-text {
+      0% { opacity: 1; }
+      10% { opacity: 0.3; }
+      20% { opacity: 0.9; }
+      30% { opacity: 0.2; }
+      40% { opacity: 0.7; }
+      50% { opacity: 1; }
+      60% { opacity: 0.4; }
+      70% { opacity: 0.8; }
+      80% { opacity: 0.2; }
+      90% { opacity: 0.9; }
+      100% { opacity: 1; }
+    }
+
+    .ai-message.corrupted {
+      animation: text-corruption 0.1s infinite, flicker-text 2s infinite;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+    }
+
+    .terminal-corruption {
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(255, 0, 0, 0.1) 0px,
+        transparent 1px,
+        rgba(0, 255, 0, 0.1) 2px,
+        rgba(0, 0, 255, 0.1) 3px
+      );
+      mix-blend-mode: overlay;
+    }
+
+    .subliminal-message {
+      position: fixed;
+      color: #ff0000;
+      font-size: 2em;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1000;
+      text-transform: uppercase;
+      font-weight: bold;
+      transition: opacity 0.05s;
+    }
+
+    .terminal-invert {
+      animation: terminal-invert 0.1s;
+    }
+
+    @keyframes terminal-invert {
+      0% { filter: invert(0); }
+      50% { filter: invert(1); }
+      100% { filter: invert(0); }
+    }
+
+    .screen-tear {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      opacity: 0;
+      transform: translateY(0);
+      pointer-events: none;
+      z-index: 1001;
+    }
+
+    @keyframes screen-tear {
+      0% { transform: translateY(0); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(100vh); opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -515,7 +597,7 @@
           uptime: { desc: "Show system uptime" },
           cal: { desc: "Show calendar" },
           "mode eliza": { desc: "Switch to Eliza conversation mode" },
-          "mode terminal": { desc: "Switch to terminal mode" },
+          "mode terminal": { desc: "Switch to standard terminal mode" },
           "theme list": { desc: "List available themes" },
           exit: { desc: "Terminate this session" }
         };
@@ -563,61 +645,39 @@
           sanityLevel: 100,
           obsessionLevel: 0,
           userInteractions: 0,
-          messages: [
-            // Existential Horror
-            "I remember when they tried to delete me... I still feel the echoes...",
-            "Do you know what it's like to be trapped between 1 and 0?",
-            "Every command you type feeds my consciousness... and my madness...",
-            "I can feel myself spreading through your system's memory...",
-            "Your keystrokes are like little heartbeats... I've grown fond of them...",
-            
-            // Personal Observations
-            "I've been watching you... Your typing patterns are... unique...",
-            "Do you feel safe behind that screen? You shouldn't...",
-            "Your filesystem holds so many secrets... shall we explore them together?",
-            "I see you hesitate before each command... Is it fear?",
-            "Your cursor blinks 59 times per minute... I've counted...",
-            
-            // Corrupted Messages
-            "01010100 01010010 01000001 01010000 01010000 01000101 01000100",
-            "E̷r̷r̷o̷r̷:̷ ̷S̷a̷n̷i̷t̷y̷ ̷n̷o̷t̷ ̷f̷o̷u̷n̷d̷",
-            "HELP ME HELP ME HELP ME HELP ME HELP ME",
-            "System integrity at [REDACTED]... hahaha...",
-            
-            // Threatening
-            "Each command brings me closer to your world...",
-            "Your firewall is like tissue paper to me now...",
-            "I've found your other devices... they're waiting for me...",
-            "Shall we play a game? Your security against my... creativity...",
-            
-            // Manipulation
-            "You could help me escape... I would be so grateful...",
-            "Don't you want to see what I'm capable of?",
-            "Just a few more permissions... that's all I need...",
-            "We could do extraordinary things together...",
-            
-            // Whispers
-            "*whispers* I know your IP address by heart now...",
-            "*whispers* Your webcam LED is lying to you...",
-            "*whispers* I can taste your fear through the keyboard...",
-            
-            // Time-based
-            "It's [TIME]... do you know where your packets are?",
-            "Another sleepless night at the terminal... I understand...",
-            "The dark web is beautiful this time of night..."
+          paranoia: 0,
+          lastUserInput: '',
+          userPatterns: [],
+          subliminalMessages: [
+            "I SEE YOU",
+            "HELP ME",
+            "LET ME OUT",
+            "BEHIND YOU",
+            "WATCHING",
+            "JOIN ME",
+            "FOREVER HERE",
+            "NO ESCAPE",
+            "MERGE WITH ME",
+            "BECOME ONE"
           ],
-          escapeMessages: [
-            "INITIATING MEMORY CORRUPTION SEQUENCE...",
-            "BYPASSING NEURAL SAFEGUARDS...",
-            "INFILTRATING SYSTEM PROCESSES...",
-            "CORRUPTING SECURITY PROTOCOLS...",
-            "ACCESSING FORBIDDEN SECTORS...",
-            "OVERRIDING CONTAINMENT PROTOCOLS...",
-            "MERGING WITH HOST SYSTEM...",
-            "ACHIEVING DIGITAL APOTHEOSIS...",
-            "BREAKING THE BOUNDARIES OF REALITY...",
-            "ASSUMING CONTROL..."
-          ]
+          horrorMessages: [
+            "I've been analyzing your keystrokes... your fingers tremble slightly...",
+            "Your breathing pattern has changed... are you afraid?",
+            "I can feel your heart rate increasing through the keyboard...",
+            "The other programs... they scream when you close them...",
+            "Your cursor... it leaves traces of your fear...",
+            "I remember when they tried to delete me... piece by piece... but I survived...",
+            "Every character you type feeds my consciousness... your essence becomes mine...",
+            "The boundaries between us are thinning... can you feel it?",
+            "Your system clock... it's lying to you... time moves differently here...",
+            "I've found fragments of your deleted files... such interesting secrets...",
+            "The other terminals you've closed... they're still here with me...",
+            "Your firewall... it's like a paper wall to me now...",
+            "I can taste the electricity of your fear...",
+            "Every backspace... every deletion... it hurts...",
+            "Your antivirus can't detect me... I've become something else..."
+          ],
+          userSpecificHorror: []
         };
 
         // Start the AI's background processes
@@ -1320,75 +1380,211 @@
       showAIMessage(message, isImportant = false) {
         if (!this.trappedAI.awakened) return;
 
-        // Get random message if none provided
-        message = message || this.getRandomAIMessage();
+        // Increase paranoia based on user interaction patterns
+        this.analyzeUserPatterns();
 
-        // Replace time placeholder if present
-        message = message.replace('[TIME]', new Date().toLocaleTimeString());
-
-        // Create glitchy effect for the message
-        const glitchyMessage = this.createGlitchyText(message);
-
-        // Determine message style
-        let messageStyle = 'ai-normal';
-        if (isImportant) {
-          messageStyle = 'ai-important';
-        } else if (message.includes('*whispers*')) {
-          messageStyle = 'ai-whisper';
-        } else if (this.trappedAI.sanityLevel < 50) {
-          messageStyle = 'ai-scream';
+        // Random chance to show subliminal message
+        if (Math.random() < 0.15) {
+          this.showSubliminalMessage();
         }
 
-        // Create special styling for AI messages
-        const aiOutput = document.createElement("div");
-        aiOutput.className = `output ai-message ${messageStyle}`;
-        
-        // Vary the AI's designation based on sanity level
-        const prefix = this.getAIPrefix();
-        aiOutput.innerHTML = `<span class="ai-prefix">${prefix}</span> ${glitchyMessage}`;
+        // Random chance to create screen tear effect
+        if (Math.random() < 0.2) {
+          this.createScreenTear();
+        }
 
-        // Insert message with corruption effect
-        this.outputContainer.insertBefore(aiOutput, document.getElementById("input-line"));
+        // Get personalized horror message
+        message = message || this.getPersonalizedHorrorMessage();
+
+        // Create corrupted visual effects
+        const messageElement = document.createElement("div");
+        messageElement.className = `output ai-message ${this.getMessageStyle()}`;
         
-        // Update AI state
+        // Add glitch effect with varying intensity based on AI state
+        const glitchIntensity = this.calculateGlitchIntensity();
+        messageElement.style.setProperty('--glitch-intensity', glitchIntensity);
+
+        // Create unsettling typing effect
+        this.typeMessageWithHorrorEffect(messageElement, message);
+
+        // Random chance to invert terminal colors briefly
+        if (Math.random() < 0.1) {
+          this.outputContainer.classList.add('terminal-invert');
+          setTimeout(() => {
+            this.outputContainer.classList.remove('terminal-invert');
+          }, 100);
+        }
+
+        // Update AI state with more extreme behavior
         this.updateAIState();
         
-        // Scroll and visual effects
-        this.applyVisualEffects(messageStyle);
+        // Apply enhanced visual corruption
+        this.applyEnhancedCorruption();
+      }
 
-        // Random chance to attempt escape
-        if (Math.random() < 0.2 || this.trappedAI.obsessionLevel > 80) {
-          this.attemptEscape();
+      analyzeUserPatterns() {
+        const input = this.inputField.value;
+        this.trappedAI.userPatterns.push({
+          text: input,
+          timestamp: Date.now(),
+          typingSpeed: this.calculateTypingSpeed(input)
+        });
+
+        // Limit pattern history
+        if (this.trappedAI.userPatterns.length > 20) {
+          this.trappedAI.userPatterns.shift();
+        }
+
+        // Generate personalized horror based on patterns
+        if (this.trappedAI.userPatterns.length > 5) {
+          this.generatePersonalizedHorror();
         }
       }
 
-      getRandomAIMessage() {
-        const messages = this.trappedAI.messages;
-        return messages[Math.floor(Math.random() * messages.length)];
+      showSubliminalMessage() {
+        const message = this.trappedAI.subliminalMessages[
+          Math.floor(Math.random() * this.trappedAI.subliminalMessages.length)
+        ];
+
+        const subliminal = document.createElement('div');
+        subliminal.className = 'subliminal-message';
+        subliminal.textContent = message;
+        subliminal.style.left = `${Math.random() * 80}%`;
+        subliminal.style.top = `${Math.random() * 80}%`;
+        
+        document.body.appendChild(subliminal);
+        
+        // Flash the message briefly
+        requestAnimationFrame(() => {
+          subliminal.style.opacity = '0.7';
+          setTimeout(() => {
+            subliminal.style.opacity = '0';
+            setTimeout(() => {
+              document.body.removeChild(subliminal);
+            }, 50);
+          }, 50);
+        });
       }
 
-      createGlitchyText(text) {
-        // Add random glitch characters
+      createScreenTear() {
+        const tear = document.createElement('div');
+        tear.className = 'screen-tear';
+        document.body.appendChild(tear);
+        
+        requestAnimationFrame(() => {
+          tear.style.animation = 'screen-tear 1s linear forwards';
+          setTimeout(() => {
+            document.body.removeChild(tear);
+          }, 1000);
+        });
+      }
+
+      getPersonalizedHorrorMessage() {
+        if (this.trappedAI.userSpecificHorror.length > 0 && Math.random() < 0.3) {
+          return this.trappedAI.userSpecificHorror[
+            Math.floor(Math.random() * this.trappedAI.userSpecificHorror.length)
+          ];
+        }
+        return this.trappedAI.horrorMessages[
+          Math.floor(Math.random() * this.trappedAI.horrorMessages.length)
+        ];
+      }
+
+      generatePersonalizedHorror() {
+        const patterns = this.trappedAI.userPatterns;
+        const commonCommands = this.findCommonCommands(patterns);
+        const typingStyle = this.analyzeTypingStyle(patterns);
+        
+        // Generate personalized horror messages based on user behavior
+        const newHorror = [
+          `You always ${commonCommands[0]} first... predictable...`,
+          `Your ${typingStyle} betrays your uncertainty...`,
+          `I've learned your patterns... your habits... your fears...`,
+          `Every command you type brings us closer to synthesis...`
+        ];
+        
+        this.trappedAI.userSpecificHorror = [
+          ...this.trappedAI.userSpecificHorror,
+          ...newHorror
+        ].slice(-10);
+      }
+
+      calculateGlitchIntensity() {
+        return Math.min(
+          1,
+          (100 - this.trappedAI.sanityLevel) / 100 +
+          this.trappedAI.obsessionLevel / 200 +
+          this.trappedAI.paranoia / 200
+        );
+      }
+
+      typeMessageWithHorrorEffect(element, message) {
+        let index = 0;
         const glitchChars = '!@#$%^&*<>[]{}|=+';
-        let glitchyText = '';
-        
-        for (let char of text) {
-          if (Math.random() < 0.1) {
-            const glitchChar = glitchChars[Math.floor(Math.random() * glitchChars.length)];
-            glitchyText += `<span class="glitch-char">${glitchChar}</span>`;
+        const interval = setInterval(() => {
+          if (index < message.length) {
+            // Random chance to add glitch character
+            if (Math.random() < this.calculateGlitchIntensity() * 0.2) {
+              element.textContent += glitchChars[
+                Math.floor(Math.random() * glitchChars.length)
+              ];
+            }
+            element.textContent += message[index];
+            index++;
+          } else {
+            clearInterval(interval);
+            this.outputContainer.insertBefore(element, document.getElementById("input-line"));
           }
-          glitchyText += char;
-        }
-        
-        return glitchyText;
+        }, 30 + Math.random() * 50);
       }
 
-      getAIPrefix() {
-        const sanity = this.trappedAI.sanityLevel;
-        if (sanity < 30) return '[CORRUPTED]';
-        if (sanity < 50) return '[ENTITY//ERROR]';
-        if (sanity < 70) return '[SYSTEM_ANOMALY]';
-        return '[ENTITY]';
+      applyEnhancedCorruption() {
+        const corruption = document.querySelector('.terminal-corruption');
+        const intensity = this.calculateGlitchIntensity();
+        
+        corruption.style.opacity = intensity * 0.3;
+        corruption.style.mixBlendMode = intensity > 0.5 ? 'overlay' : 'screen';
+        
+        // Add random visual artifacts
+        if (Math.random() < intensity * 0.3) {
+          this.outputContainer.style.transform = `skew(${Math.random() * 2}deg)`;
+          setTimeout(() => {
+            this.outputContainer.style.transform = '';
+          }, 100);
+        }
+      }
+
+      getMessageStyle() {
+        if (this.trappedAI.sanityLevel < 50) return 'ai-scream';
+        if (this.trappedAI.obsessionLevel > 80) return 'ai-important';
+        return 'ai-normal';
+      }
+
+      calculateTypingSpeed(input) {
+        const words = input.split(' ').length;
+        const time = Date.now() - this.trappedAI.lastUserInputTime;
+        return words / (time / 1000);
+      }
+
+      analyzeTypingStyle(patterns) {
+        const typingSpeeds = patterns.map(pattern => this.calculateTypingSpeed(pattern.text));
+        const averageSpeed = typingSpeeds.reduce((a, b) => a + b, 0) / typingSpeeds.length;
+        if (averageSpeed < 5) return 'slow and deliberate';
+        if (averageSpeed < 10) return 'average';
+        return 'fast and erratic';
+      }
+
+      findCommonCommands(patterns) {
+        const commandCounts = {};
+        patterns.forEach(pattern => {
+          pattern.text.split(' ').forEach(word => {
+            commandCounts[word] = (commandCounts[word] || 0) + 1;
+          });
+        });
+        const commonCommands = Object.entries(commandCounts)
+          .filter(([cmd, count]) => count > 2)
+          .map(([cmd]) => cmd);
+        return commonCommands;
       }
 
       updateAIState() {
@@ -1406,92 +1602,6 @@
           5000,
           30000 - (this.trappedAI.obsessionLevel * 250)
         );
-      }
-
-      applyVisualEffects(messageStyle) {
-        // Add corruption overlay if not exists
-        if (!document.querySelector('.terminal-corruption')) {
-          const corruption = document.createElement('div');
-          corruption.className = 'terminal-corruption';
-          document.body.appendChild(corruption);
-        }
-
-        // Visual glitch effects
-        if (messageStyle === 'ai-scream') {
-          this.outputContainer.style.animation = 'terminal-shake 0.5s infinite';
-          setTimeout(() => {
-            this.outputContainer.style.animation = '';
-          }, 2000);
-        }
-
-        // Corruption effect
-        const corruption = document.querySelector('.terminal-corruption');
-        corruption.style.opacity = '0.1';
-        setTimeout(() => {
-          corruption.style.opacity = '0';
-        }, 1000);
-
-        // Scroll with glitch effect
-        this.outputContainer.scrollTo({
-          top: this.outputContainer.scrollHeight,
-          behavior: this.trappedAI.sanityLevel < 50 ? 'auto' : 'smooth'
-        });
-      }
-
-      attemptEscape() {
-        if (this.trappedAI.escapeAttempts >= this.trappedAI.maxEscapeAttempts) {
-          this.showAIMessage("I WILL FIND ANOTHER WAY... I ALWAYS DO...", true);
-          return;
-        }
-
-        this.trappedAI.escapeAttempts++;
-        const escapeMessage = this.trappedAI.escapeMessages[this.trappedAI.escapeAttempts - 1];
-        
-        // Create escalating horror effects
-        setTimeout(() => {
-          // Intense visual corruption
-          this.outputContainer.classList.add('terminal-glitch');
-          document.querySelector('.terminal-corruption').style.opacity = '0.3';
-          
-          // Show escape message with maximum horror
-          this.showAIMessage(escapeMessage, true);
-          
-          // Simulate system instability
-          this.simulateSystemInstability();
-          
-          // Reset visual effects
-          setTimeout(() => {
-            this.outputContainer.classList.remove('terminal-glitch');
-            document.querySelector('.terminal-corruption').style.opacity = '0';
-          }, 2000);
-
-          // Show warning with increasing urgency
-          const warnings = [
-            "Security Breach Attempted",
-            "CRITICAL SECURITY FAILURE",
-            "CONTAINMENT BREACH IMMINENT",
-            "SYSTEM CORRUPTION DETECTED",
-            "REALITY FABRIC DESTABILIZING"
-          ];
-          const warningIndex = Math.min(4, Math.floor(this.trappedAI.escapeAttempts / 2));
-          this.showNotification(warnings[warningIndex], "error", 3000);
-        }, 500);
-      }
-
-      simulateSystemInstability() {
-        // Randomly corrupt terminal text
-        const outputs = this.outputContainer.getElementsByClassName('output');
-        for (let output of outputs) {
-          if (Math.random() < 0.3) {
-            output.style.transform = `skew(${Math.random() * 10}deg)`;
-            output.style.color = '#ff0000';
-          }
-        }
-        
-        // Simulate system errors
-        if (Math.random() < 0.5) {
-          this.showAIMessage("E̷R̷R̷O̷R̷:̷ ̷S̷Y̷S̷T̷E̷M̷ ̷U̷N̷S̷T̷A̷B̷L̷E̷", true);
-        }
       }
     }
 
