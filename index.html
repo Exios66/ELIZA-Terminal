@@ -27,6 +27,7 @@
       overflow-y: auto;
       box-sizing: border-box;
       white-space: pre-wrap;
+      position: relative;
     }
 
     .output {
@@ -84,6 +85,46 @@
     }
     ::-webkit-scrollbar-thumb:hover {
       background: #888;
+    }
+
+    /* Command suggestions dropdown */
+    .suggestions-dropdown {
+      position: absolute;
+      bottom: 40px;
+      left: 30px;
+      background: var(--highlight-color);
+      border: 1px solid var(--text-color);
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      width: auto;
+      min-width: 200px;
+      display: none;
+      z-index: 1000;
+    }
+
+    .suggestions-dropdown.active {
+      display: block;
+    }
+
+    .suggestion-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .suggestion-item:hover,
+    .suggestion-item.selected {
+      background: var(--text-color);
+      color: var(--bg-color);
+    }
+
+    .suggestion-description {
+      font-size: 0.9em;
+      opacity: 0.8;
+      margin-left: 20px;
     }
   </style>
 </head>
@@ -272,6 +313,33 @@
           }
         };
 
+        // Available commands with descriptions
+        this.commands = {
+          help: { desc: "Display available commands" },
+          clear: { desc: "Clear the terminal screen" },
+          history: { desc: "Show command history" },
+          ls: { desc: "List files" },
+          pwd: { desc: "Print working directory" },
+          whoami: { desc: "Display current user" },
+          "uname -a": { desc: "Display system information" },
+          date: { desc: "Show current date/time" },
+          df: { desc: "Show disk usage info" },
+          uptime: { desc: "Show system uptime" },
+          cal: { desc: "Show calendar" },
+          "mode eliza": { desc: "Switch to Eliza conversation mode" },
+          "mode terminal": { desc: "Switch to terminal mode" },
+          "theme list": { desc: "List available themes" },
+          exit: { desc: "Terminate this session" }
+        };
+
+        // Create suggestions dropdown
+        this.suggestionsDropdown = document.createElement('div');
+        this.suggestionsDropdown.className = 'suggestions-dropdown';
+        this.outputContainer.appendChild(this.suggestionsDropdown);
+        
+        // Track current suggestion selection
+        this.selectedSuggestionIndex = -1;
+
         // Attach event listeners
         this.init();
         // Load user theme preference if stored
@@ -292,13 +360,12 @@
           document.execCommand("insertText", false, sanitizedText);
         });
 
-        // Enhanced keydown handling
+        // Enhanced keydown handling with suggestions
         this.inputField.addEventListener("keydown", (event) => {
-          // Handle Enter with proper command deduplication
           if (event.key === "Enter") {
+            this.suggestionsDropdown.classList.remove('active');
             const command = this.inputField.value.trim();
             if (command) {
-              // Don't add if it's the same as the last command
               if (!this.commandHistory.length || 
                   this.commandHistory[this.commandHistory.length - 1] !== command) {
                 this.addToHistory(command);
@@ -308,34 +375,46 @@
               this.historyIndex = this.commandHistory.length;
             }
           }
-          // Enhanced arrow key navigation
-          else if (event.key === "ArrowUp") {
-            if (this.historyIndex > 0) {
-              this.historyIndex--;
-              this.inputField.value = this.commandHistory[this.historyIndex];
-              // Move cursor to end of input
-              setTimeout(() => {
-                this.inputField.selectionStart = this.inputField.value.length;
-                this.inputField.selectionEnd = this.inputField.value.length;
-              }, 0);
-            }
+          else if (event.key === "Tab") {
             event.preventDefault();
+            this.handleTabCompletion();
           }
           else if (event.key === "ArrowDown") {
-            if (this.historyIndex < this.commandHistory.length - 1) {
+            if (this.suggestionsDropdown.classList.contains('active')) {
+              event.preventDefault();
+              this.navigateSuggestions(1);
+            } else if (this.historyIndex < this.commandHistory.length - 1) {
               this.historyIndex++;
               this.inputField.value = this.commandHistory[this.historyIndex];
             } else {
               this.historyIndex = this.commandHistory.length;
               this.inputField.value = "";
             }
-            event.preventDefault();
           }
-          // Clear line with Ctrl+C
-          else if (event.key === "c" && event.ctrlKey) {
-            this.inputField.value = "";
-            this.printOutput("^C");
-            event.preventDefault();
+          else if (event.key === "ArrowUp") {
+            if (this.suggestionsDropdown.classList.contains('active')) {
+              event.preventDefault();
+              this.navigateSuggestions(-1);
+            } else if (this.historyIndex > 0) {
+              this.historyIndex--;
+              this.inputField.value = this.commandHistory[this.historyIndex];
+            }
+          }
+          else if (event.key === "Escape") {
+            this.suggestionsDropdown.classList.remove('active');
+          }
+        });
+
+        // Input event for real-time suggestions
+        this.inputField.addEventListener("input", () => {
+          this.showSuggestions();
+        });
+
+        // Click outside to close suggestions
+        document.addEventListener('click', (event) => {
+          if (!this.suggestionsDropdown.contains(event.target) && 
+              event.target !== this.inputField) {
+            this.suggestionsDropdown.classList.remove('active');
           }
         });
 
@@ -755,6 +834,85 @@
         const outputs = this.outputContainer.getElementsByClassName("output");
         while (outputs.length > this.maxOutputLines) {
           outputs[0].remove();
+        }
+      }
+
+      showSuggestions() {
+        const input = this.inputField.value.toLowerCase();
+        if (!input) {
+          this.suggestionsDropdown.classList.remove('active');
+          return;
+        }
+
+        const matches = Object.entries(this.commands)
+          .filter(([cmd]) => cmd.toLowerCase().includes(input))
+          .sort((a, b) => {
+            // Prioritize commands that start with input
+            const aStarts = a[0].toLowerCase().startsWith(input);
+            const bStarts = b[0].toLowerCase().startsWith(input);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return a[0].localeCompare(b[0]);
+          })
+          .slice(0, 8); // Limit to 8 suggestions
+
+        if (matches.length === 0) {
+          this.suggestionsDropdown.classList.remove('active');
+          return;
+        }
+
+        this.suggestionsDropdown.innerHTML = matches
+          .map(([cmd, { desc }], index) => `
+            <div class="suggestion-item" data-command="${cmd}">
+              <span class="suggestion-command">${cmd}</span>
+              <span class="suggestion-description">${desc}</span>
+            </div>
+          `).join('');
+
+        this.suggestionsDropdown.classList.add('active');
+        this.selectedSuggestionIndex = -1;
+
+        // Add click handlers to suggestions
+        this.suggestionsDropdown.querySelectorAll('.suggestion-item').forEach(item => {
+          item.addEventListener('click', () => {
+            this.inputField.value = item.dataset.command;
+            this.suggestionsDropdown.classList.remove('active');
+            this.inputField.focus();
+          });
+        });
+      }
+
+      navigateSuggestions(direction) {
+        const suggestions = this.suggestionsDropdown.querySelectorAll('.suggestion-item');
+        if (!suggestions.length) return;
+
+        // Remove previous selection
+        suggestions[this.selectedSuggestionIndex]?.classList.remove('selected');
+
+        // Update selection index
+        this.selectedSuggestionIndex += direction;
+        if (this.selectedSuggestionIndex >= suggestions.length) {
+          this.selectedSuggestionIndex = 0;
+        } else if (this.selectedSuggestionIndex < 0) {
+          this.selectedSuggestionIndex = suggestions.length - 1;
+        }
+
+        // Apply new selection
+        const selectedItem = suggestions[this.selectedSuggestionIndex];
+        selectedItem.classList.add('selected');
+        this.inputField.value = selectedItem.dataset.command;
+      }
+
+      handleTabCompletion() {
+        const suggestions = this.suggestionsDropdown.querySelectorAll('.suggestion-item');
+        if (suggestions.length === 1) {
+          // If only one suggestion, use it
+          this.inputField.value = suggestions[0].dataset.command;
+          this.suggestionsDropdown.classList.remove('active');
+        } else if (suggestions.length > 1 && this.selectedSuggestionIndex >= 0) {
+          // If multiple suggestions and one is selected, use the selected one
+          this.inputField.value = suggestions[this.selectedSuggestionIndex].dataset.command;
+          this.suggestionsDropdown.classList.remove('active');
         }
       }
     }
