@@ -708,7 +708,11 @@
 
         // Enhanced keydown handling with suggestions
         this.inputField.addEventListener("keydown", (event) => {
-          if (event.key === "Return") {
+          if (
+            event.key === "Return" ||
+            (event.ctrlKey && event.key === "Return") ||
+            (event.ctrlKey && event.key.toLowerCase() === "t")
+          ) {
             this.suggestionsDropdown.classList.remove('active');
             const command = this.inputField.value.trim();
             if (command) {
