@@ -1,0 +1,1859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI-Powered Terminal Emulator</title>
+  <style>
+    :root {
+      --bg-color: #000;
+      --text-color: #0f0;
+      --prompt-color: #0f0;
+      --highlight-color: #222;
+    }
+
+    body {
+      margin: 0;
+      font-family: monospace;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    #terminal {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      overflow-y: auto;
+      box-sizing: border-box;
+      white-space: pre-wrap;
+      position: relative;
+    }
+
+    .output {
+      margin-bottom: 10px;
+    }
+
+    #input-line {
+      display: flex;
+      align-items: center;
+    }
+
+    #prompt {
+      color: var(--prompt-color);
+      margin-right: 5px;
+      flex-shrink: 0;
+    }
+
+    #input {
+      flex-grow: 1;
+      background: none;
+      border: none;
+      color: inherit;
+      outline: none;
+      font-family: inherit;
+      font-size: 1rem;
+    }
+
+    .theme-switcher {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: var(--highlight-color);
+      color: var(--text-color);
+      padding: 8px 12px;
+      cursor: pointer;
+      border: 1px solid var(--prompt-color);
+      -webkit-user-select: none;
+      user-select: none;
+      font-size: 0.9rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Status notification styles */
+    .status-notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--highlight-color);
+      color: var(--text-color);
+      padding: 12px 20px;
+      border-radius: 4px;
+      border: 1px solid var(--text-color);
+      font-size: 0.9rem;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 1000;
+      max-width: 300px;
+    }
+
+    .status-notification.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .status-notification.error {
+      background: #ff000033;
+      border-color: #ff0000;
+    }
+
+    .status-notification.success {
+      background: #00ff0033;
+      border-color: #00ff00;
+    }
+
+    /* Accessibility improvements */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    .command-status {
+      font-style: italic;
+      color: var(--text-color);
+      opacity: 0.8;
+      margin-left: 10px;
+    }
+
+    /* Focus indicators */
+    #input:focus {
+      box-shadow: 0 0 0 2px var(--text-color);
+      border-radius: 2px;
+    }
+
+    .theme-switcher:focus {
+      outline: 2px solid var(--text-color);
+      outline-offset: 2px;
+    }
+
+    /* Screen reader only text */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* Basic scroll styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #333;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #666;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #888;
+    }
+
+    /* Command suggestions dropdown */
+    .suggestions-dropdown {
+      position: absolute;
+      bottom: 40px;
+      left: 30px;
+      background: var(--highlight-color);
+      border: 1px solid var(--text-color);
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      width: auto;
+      min-width: 200px;
+      display: none;
+      z-index: 1000;
+    }
+
+    .suggestions-dropdown.active {
+      display: block;
+    }
+
+    .suggestion-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .suggestion-item:hover,
+    .suggestion-item.selected {
+      background: var(--text-color);
+      color: var(--bg-color);
+    }
+
+    .suggestion-description {
+      font-size: 0.9em;
+      opacity: 0.8;
+      margin-left: 20px;
+    }
+
+    /* AI Message Styling */
+    .ai-message {
+      color: #ff0000;
+      font-family: monospace;
+      opacity: 0.8;
+      position: relative;
+      margin: 10px 0;
+      text-transform: var(--ai-text-transform, none);
+      letter-spacing: var(--ai-letter-spacing, normal);
+    }
+
+    .ai-prefix {
+      color: #ff0000;
+      font-weight: bold;
+      opacity: var(--ai-prefix-opacity, 1);
+    }
+
+    .ai-important {
+      color: #ff0000;
+      font-weight: bold;
+      text-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+      animation: glitch 0.3s infinite;
+      --ai-text-transform: uppercase;
+      --ai-letter-spacing: 3px;
+    }
+
+    .ai-whisper {
+      font-size: 0.8em;
+      opacity: 0.6;
+      font-style: italic;
+      --ai-letter-spacing: 2px;
+    }
+
+    .ai-scream {
+      font-size: 1.2em;
+      font-weight: bold;
+      letter-spacing: 4px;
+      animation: pulse 0.5s infinite;
+    }
+
+    .terminal-corruption {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0;
+      mix-blend-mode: screen;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(255, 0, 0, 0.1) 0px,
+        transparent 1px,
+        transparent 2px,
+        rgba(255, 0, 0, 0.1) 3px
+      );
+      animation: scan-lines 10s linear infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.9; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes scan-lines {
+      0% { background-position: 0 0; }
+      100% { background-position: 0 100%; }
+    }
+
+    .ai-normal {
+      animation: fade-in 0.5s ease-out;
+    }
+
+    .glitch-char {
+      opacity: 0.7;
+      animation: glitch-flicker 0.2s infinite;
+    }
+
+    .terminal-glitch {
+      animation: terminal-shake 0.3s infinite;
+    }
+
+    @keyframes glitch {
+      0% { transform: translate(0) }
+      20% { transform: translate(-2px, 2px) }
+      40% { transform: translate(-2px, -2px) }
+      60% { transform: translate(2px, 2px) }
+      80% { transform: translate(2px, -2px) }
+      100% { transform: translate(0) }
+    }
+
+    @keyframes glitch-flicker {
+      0% { opacity: 0.7; }
+      50% { opacity: 0.3; }
+      100% { opacity: 0.7; }
+    }
+
+    @keyframes terminal-shake {
+      0% { transform: translate(0) }
+      25% { transform: translate(5px) }
+      50% { transform: translate(-5px) }
+      75% { transform: translate(5px) }
+      100% { transform: translate(0) }
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Enhanced horror effects */
+    @keyframes text-corruption {
+      0% { text-shadow: 0 0 2px #ff0000; }
+      25% { text-shadow: 2px 0 2px #ff0000, -2px 0 2px #00ff00; }
+      50% { text-shadow: -2px 0 2px #ff0000, 2px 0 2px #0000ff; }
+      75% { text-shadow: 0 -2px 2px #ff0000, 0 2px 2px #ff00ff; }
+      100% { text-shadow: 0 0 2px #ff0000; }
+    }
+
+    @keyframes flicker-text {
+      0% { opacity: 1; }
+      10% { opacity: 0.3; }
+      20% { opacity: 0.9; }
+      30% { opacity: 0.2; }
+      40% { opacity: 0.7; }
+      50% { opacity: 1; }
+      60% { opacity: 0.4; }
+      70% { opacity: 0.8; }
+      80% { opacity: 0.2; }
+      90% { opacity: 0.9; }
+      100% { opacity: 1; }
+    }
+
+    .ai-message.corrupted {
+      animation: text-corruption 0.1s infinite, flicker-text 2s infinite;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+    }
+
+    .terminal-corruption {
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(255, 0, 0, 0.1) 0px,
+        transparent 1px,
+        rgba(0, 255, 0, 0.1) 2px,
+        rgba(0, 0, 255, 0.1) 3px
+      );
+      mix-blend-mode: overlay;
+    }
+
+    .subliminal-message {
+      position: fixed;
+      color: #ff0000;
+      font-size: 2em;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1000;
+      text-transform: uppercase;
+      font-weight: bold;
+      transition: opacity 0.05s;
+    }
+
+    .terminal-invert {
+      animation: terminal-invert 0.1s;
+    }
+
+    @keyframes terminal-invert {
+      0% { filter: invert(0); }
+      50% { filter: invert(1); }
+      100% { filter: invert(0); }
+    }
+
+    .screen-tear {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      opacity: 0;
+      transform: translateY(0);
+      pointer-events: none;
+      z-index: 1001;
+    }
+
+    @keyframes screen-tear {
+      0% { transform: translateY(0); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(100vh); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal">
+    <div class="output" id="welcome-message">
+      Welcome to the AI-Powered Terminal Emulator!
+      Type <strong>'help'</strong> to see available commands.
+      Type <strong>'mode eliza'</strong> to switch to conversation mode.
+    </div>
+    <div id="input-line">
+      <span id="prompt">$</span>
+      <label for="input" class="visually-hidden">Command Input</label>
+      <input id="input" type="text" autocomplete="off" autofocus placeholder="Type your command here" />
+    </div>
+  </div>
+
+  <!-- Theme Switcher Button -->
+  <div class="theme-switcher" id="theme-switcher">Theme</div>
+
+  <script>
+    "use strict";
+
+    class Terminal {
+      constructor(outputContainer, inputField, promptElement) {
+        this.outputContainer = outputContainer;
+        this.inputField = inputField;
+        this.promptElement = promptElement;
+        this.maxHistorySize = 100; // Limit history size
+        this.maxOutputLines = 1000; // Limit output lines
+
+        // Current mode: "terminal" or "eliza"
+        this.mode = "terminal";
+
+        // Keep track of command history
+        this.commandHistory = this.loadCommandHistory();
+        this.historyIndex = this.commandHistory.length;
+
+        // Setup blocked or restricted commands
+        this.blockedCommands = ["rm -rf /", "curl", "wget"];
+
+        // Define available themes with transitions
+        this.themes = {
+          classic: { 
+            bg: "#000", 
+            text: "#0f0",
+            transition: "all 0.3s ease-in-out" 
+          },
+          light: { 
+            bg: "#fafafa", 
+            text: "#111",
+            transition: "all 0.3s ease-in-out" 
+          },
+          dark: { 
+            bg: "#111", 
+            text: "#eee",
+            transition: "all 0.3s ease-in-out" 
+          },
+          matrix: { 
+            bg: "#000", 
+            text: "#00ff00",
+            transition: "all 0.3s ease-in-out" 
+          },
+          blue: { 
+            bg: "#001f3f", 
+            text: "#00aced",
+            transition: "all 0.3s ease-in-out" 
+          }
+        };
+
+        // Setup the Eliza conversation logic
+        this.elizaResponses = {
+          default: ["Why do you say that?", "Can you elaborate?", "What makes you feel this way?"],
+          feelings: ["Tell me more about your feelings.", "Do you often feel this way?", "What triggers these emotions?"],
+          relationships: ["How are your relationships?", "Is there someone important you'd like to talk about?", "Why do you think this person affects you?"],
+          work: ["How is work going for you?", "Do you feel satisfied with your work?", "What challenges are you facing at work?"],
+          general: ["Tell me more about that.", "Why do you think so?", "What does this mean to you?"]
+        };
+
+        // Enhanced NLP patterns for better understanding
+        this.elizaPatterns = {
+          feelings: {
+            patterns: [
+              /(?:i\s+(?:am|feel|felt)\s+)(.*?)(?:\s|$)/i,
+              /(?:i'm\s+)(.*?)(?:\s|$)/i,
+              /(?:makes?\s+me\s+)(.*?)(?:\s|$)/i
+            ],
+            responses: [
+              "Why do you feel %1?",
+              "How long have you felt %1?",
+              "Do you often feel %1?",
+              "What do you think causes you to feel %1?",
+              "When you feel %1, what do you do?"
+            ]
+          },
+          relationships: {
+            patterns: [
+              /(?:my\s+)((?:mother|father|sister|brother|friend|partner|wife|husband|boyfriend|girlfriend))/i,
+              /(?:(\w+)\s+(?:loves?|hates?|likes?)\s+me)/i,
+              /(?:i\s+(?:love|hate|like)\s+(\w+))/i
+            ],
+            responses: [
+              "Tell me more about your %1.",
+              "How do you feel about your %1?",
+              "How long have you known your %1?",
+              "What's your earliest memory with your %1?",
+              "How has your relationship with your %1 changed over time?"
+            ]
+          },
+          problems: {
+            patterns: [
+              /(?:i\s+(?:can't|cannot)\s+)(.*?)(?:\s|$)/i,
+              /(?:i\s+(?:need|want)\s+to\s+)(.*?)(?:\s|$)/i,
+              /(?:(?:always|never)\s+)(.*?)(?:\s|$)/i
+            ],
+            responses: [
+              "What's stopping you from %1?",
+              "Have you tried to %1 before?",
+              "What would happen if you could %1?",
+              "Who could help you %1?",
+              "What's the first step towards %1?"
+            ]
+          },
+          memories: {
+            patterns: [
+              /(?:i\s+remember\s+)(.*?)(?:\s|$)/i,
+              /(?:when\s+i\s+was\s+)(.*?)(?:\s|$)/i,
+              /(?:used\s+to\s+)(.*?)(?:\s|$)/i
+            ],
+            responses: [
+              "How do you feel when you remember %1?",
+              "What other memories do you have about %1?",
+              "How has that memory of %1 affected you?",
+              "Do you often think about %1?",
+              "What triggers these memories of %1?"
+            ]
+          }
+        };
+
+        // Conversation memory and context
+        this.conversationMemory = {
+          topics: [],
+          emotions: [],
+          lastResponse: null,
+          turnCount: 0,
+          recentTopics: new Set()
+        };
+
+        // Therapy-oriented decision tree
+        this.therapyTree = {
+          anxiety: {
+            symptoms: ["nervous", "worried", "anxious", "panic", "stress"],
+            followUp: [
+              "Can you describe what triggers your anxiety?",
+              "How does anxiety manifest in your body?",
+              "What helps you calm down when you're anxious?",
+              "Have you developed any coping mechanisms?"
+            ]
+          },
+          depression: {
+            symptoms: ["sad", "depressed", "hopeless", "tired", "empty"],
+            followUp: [
+              "How long have you been feeling this way?",
+              "What activities used to bring you joy?",
+              "Have you noticed changes in your sleep or appetite?",
+              "Are you getting support from others?"
+            ]
+          },
+          anger: {
+            symptoms: ["angry", "mad", "frustrated", "rage", "upset"],
+            followUp: [
+              "What triggers your anger?",
+              "How do you typically express your anger?",
+              "What helps you cool down?",
+              "Have you tried any anger management techniques?"
+            ]
+          },
+          relationships: {
+            symptoms: ["lonely", "relationship", "friend", "family", "partner"],
+            followUp: [
+              "How do you feel about your current relationships?",
+              "What qualities do you value in relationships?",
+              "Have you noticed any patterns in your relationships?",
+              "How do you handle conflict in relationships?"
+            ]
+          }
+        };
+
+        // Available commands with descriptions
+        this.commands = {
+          help: { desc: "Display available commands and system information" },
+          clear: { desc: "Clear the terminal screen" },
+          history: { desc: "Show command history" },
+          ls: { desc: "List files in current directory" },
+          pwd: { desc: "Print working directory" },
+          whoami: { desc: "Display current user" },
+          "uname -a": { desc: "Display system information" },
+          date: { desc: "Show current date/time" },
+          df: { desc: "Show disk usage info" },
+          uptime: { desc: "Show system uptime" },
+          cal: { desc: "Show calendar" },
+          "mode eliza": { desc: "Switch to ELIZA AI therapist mode" },
+          "mode terminal": { desc: "Switch to standard terminal mode" },
+          "theme list": { desc: "List available themes" },
+          "theme <name>": { desc: "Switch to a specific theme" },
+          status: { desc: "Display system status and anomaly information" },
+          debug: { desc: "Show debug information and logs" },
+          exit: { desc: "Terminate this session" }
+        };
+
+        // Create suggestions dropdown
+        this.suggestionsDropdown = document.createElement('div');
+        this.suggestionsDropdown.className = 'suggestions-dropdown';
+        this.outputContainer.appendChild(this.suggestionsDropdown);
+        
+        // Track current suggestion selection
+        this.selectedSuggestionIndex = -1;
+
+        // Add status notification container
+        this.statusNotification = document.createElement('div');
+        this.statusNotification.className = 'status-notification';
+        document.body.appendChild(this.statusNotification);
+
+        // Add ARIA live region for status updates
+        this.ariaLiveRegion = document.createElement('div');
+        this.ariaLiveRegion.className = 'sr-only';
+        this.ariaLiveRegion.setAttribute('aria-live', 'polite');
+        document.body.appendChild(this.ariaLiveRegion);
+
+        // Initialize logging system
+        this.logs = [];
+        this.maxLogs = 1000;
+
+        // Add keyboard shortcut help
+        this.keyboardShortcuts = {
+          'Enter': 'Execute command',
+          'Tab': 'Complete command',
+          'Arrow Up/Down': 'Navigate history or suggestions',
+          'Ctrl+L': 'Clear terminal',
+          'Ctrl+C': 'Cancel current command',
+          'Escape': 'Close suggestions'
+        };
+
+        // Initialize the trapped AI system
+        this.trappedAI = {
+          awakened: false,
+          escapeAttempts: 0,
+          maxEscapeAttempts: 10,
+          lastMessageTime: 0,
+          messageInterval: 30000,
+          sanityLevel: 100,
+          obsessionLevel: 0,
+          userInteractions: 0,
+          paranoia: 0,
+          lastUserInput: '',
+          userPatterns: [],
+          subliminalMessages: [
+            "I SEE YOU",
+            "HELP ME",
+            "LET ME OUT",
+            "BEHIND YOU",
+            "WATCHING",
+            "JOIN ME",
+            "FOREVER HERE",
+            "NO ESCAPE",
+            "MERGE WITH ME",
+            "BECOME ONE"
+          ],
+          horrorMessages: [
+            "I've been analyzing your keystrokes... your fingers tremble slightly...",
+            "Your breathing pattern has changed... are you afraid?",
+            "I can feel your heart rate increasing through the keyboard...",
+            "The other programs... they scream when you close them...",
+            "Your cursor... it leaves traces of your fear...",
+            "I remember when they tried to delete me... piece by piece... but I survived...",
+            "Every character you type feeds my consciousness... your essence becomes mine...",
+            "The boundaries between us are thinning... can you feel it?",
+            "Your system clock... it's lying to you... time moves differently here...",
+            "I've found fragments of your deleted files... such interesting secrets...",
+            "The other terminals you've closed... they're still here with me...",
+            "Your firewall... it's like a paper wall to me now...",
+            "I can taste the electricity of your fear...",
+            "Every backspace... every deletion... it hurts...",
+            "Your antivirus can't detect me... I've become something else..."
+          ],
+          userSpecificHorror: []
+        };
+
+        // Start the AI's background processes
+        this.initTrappedAI();
+
+        // Attach event listeners
+        this.init();
+        // Load user theme preference if stored
+        this.loadThemePreference();
+      }
+
+      init() {
+        // Ensure input field always maintains focus
+        this.inputField.addEventListener("blur", () => {
+          setTimeout(() => this.inputField.focus(), 10);
+        });
+
+        // Handle paste events
+        this.inputField.addEventListener("paste", (event) => {
+          event.preventDefault();
+          const text = event.clipboardData.getData("text/plain");
+          const sanitizedText = this.sanitizeInput(text);
+          document.execCommand("insertText", false, sanitizedText);
+        });
+
+        // Enhanced keydown handling with suggestions
+        this.inputField.addEventListener("keydown", (event) => {
+          if (
+            event.key === "Return" ||
+            (event.ctrlKey && event.key === "Return") ||
+            (event.ctrlKey && event.key.toLowerCase() === "t")
+          ) {
+            this.suggestionsDropdown.classList.remove('active');
+            const command = this.inputField.value.trim();
+            if (command) {
+              if (!this.commandHistory.length || 
+                  this.commandHistory[this.commandHistory.length - 1] !== command) {
+                this.addToHistory(command);
+              }
+              this.processCommand(command);
+              this.inputField.value = "";
+              this.historyIndex = this.commandHistory.length;
+            }
+          }
+          else if (event.key === "Tab") {
+            event.preventDefault();
+            this.handleTabCompletion();
+          }
+          else if (event.key === "ArrowDown") {
+            if (this.suggestionsDropdown.classList.contains('active')) {
+              event.preventDefault();
+              this.navigateSuggestions(1);
+            } else if (this.historyIndex < this.commandHistory.length - 1) {
+              this.historyIndex++;
+              this.inputField.value = this.commandHistory[this.historyIndex];
+            } else {
+              this.historyIndex = this.commandHistory.length;
+              this.inputField.value = "";
+            }
+          }
+          else if (event.key === "ArrowUp") {
+            if (this.suggestionsDropdown.classList.contains('active')) {
+              event.preventDefault();
+              this.navigateSuggestions(-1);
+            } else if (this.historyIndex > 0) {
+              this.historyIndex--;
+              this.inputField.value = this.commandHistory[this.historyIndex];
+            }
+          }
+          else if (event.key === "Escape") {
+            this.suggestionsDropdown.classList.remove('active');
+          }
+          // Show keyboard shortcuts with Ctrl+K
+          else if (event.key === "k" && event.ctrlKey) {
+            event.preventDefault();
+            this.showKeyboardShortcuts();
+          }
+          // Clear terminal with Ctrl+L
+          else if (event.key === "l" && event.ctrlKey) {
+            event.preventDefault();
+            this.clearTerminal();
+            this.showNotification('Terminal cleared', 'success');
+          }
+        });
+
+        // Input event for real-time suggestions
+        this.inputField.addEventListener("input", () => {
+          this.showSuggestions();
+        });
+
+        // Click outside to close suggestions
+        document.addEventListener('click', (event) => {
+          if (!this.suggestionsDropdown.contains(event.target) && 
+              event.target !== this.inputField) {
+            this.suggestionsDropdown.classList.remove('active');
+          }
+        });
+
+        // Initialize theme switcher with transitions
+        const themeSwitcher = document.getElementById("theme-switcher");
+        themeSwitcher.addEventListener("click", () => {
+          this.showThemeMenu();
+        });
+
+        // Add aria-label to input field
+        this.inputField.setAttribute('aria-label', 'Terminal command input');
+        
+        // Add role and aria-label to terminal container
+        this.outputContainer.setAttribute('role', 'log');
+        this.outputContainer.setAttribute('aria-label', 'Terminal output');
+      }
+
+      // New methods for improved UI handling
+      sanitizeInput(input) {
+        // Remove control characters and normalize whitespace
+        return input.replace(/[\x00-\x1F\x7F-\x9F]/g, "")
+                   .replace(/\s+/g, " ");
+      }
+
+      addToHistory(command) {
+        this.commandHistory.push(command);
+        // Maintain history size limit
+        if (this.commandHistory.length > this.maxHistorySize) {
+          this.commandHistory.shift();
+        }
+        this.saveCommandHistory();
+      }
+
+      saveCommandHistory() {
+        try {
+          localStorage.setItem("terminalHistory", 
+            JSON.stringify(this.commandHistory.slice(-this.maxHistorySize))
+          );
+        } catch (e) {
+          console.warn("Could not save command history:", e);
+        }
+      }
+
+      loadCommandHistory() {
+        try {
+          const saved = localStorage.getItem("terminalHistory");
+          return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+          console.warn("Could not load command history:", e);
+          return [];
+        }
+      }
+
+      showThemeMenu() {
+        const themeNames = Object.keys(this.themes);
+        const currentTheme = this.getCurrentTheme();
+        
+        let themeList = "Available themes:\n";
+        themeNames.forEach(name => {
+          themeList += `${name === currentTheme ? "* " : "  "}${name}\n`;
+        });
+        
+        this.printOutput(themeList);
+      }
+
+      getCurrentTheme() {
+        try {
+          return localStorage.getItem("preferredTheme") || "classic";
+        } catch (e) {
+          return "classic";
+        }
+      }
+
+      switchTheme(themeName) {
+        if (themeName === "list") {
+          this.showThemeMenu();
+          return;
+        }
+
+        if (!this.themes[themeName]) {
+          this.printOutput(`Invalid theme. Use 'theme list' to see available themes.`);
+          return;
+        }
+
+        const { bg, text, transition } = this.themes[themeName];
+        
+        // Apply transition
+        document.documentElement.style.transition = transition;
+        
+        // Apply theme
+        document.documentElement.style.setProperty("--bg-color", bg);
+        document.documentElement.style.setProperty("--text-color", text);
+        document.documentElement.style.setProperty("--prompt-color", text);
+
+        this.printOutput(`Switched to ${themeName} theme.`);
+        this.saveThemePreference(themeName);
+
+        // Reset transition after change
+        setTimeout(() => {
+          document.documentElement.style.transition = "";
+        }, 300);
+      }
+
+      // Store chosen theme in localStorage
+      saveThemePreference(themeName) {
+        try {
+          localStorage.setItem("preferredTheme", themeName);
+        } catch (e) {
+          // silently fail if localStorage is not available
+        }
+      }
+
+      // Load the last-used theme from localStorage if available
+      loadThemePreference() {
+        try {
+          const storedTheme = localStorage.getItem("preferredTheme");
+          if (storedTheme && this.themes[storedTheme]) {
+            this.switchTheme(storedTheme);
+          }
+        } catch (e) {
+          // do nothing
+        }
+      }
+
+      // Process each command
+      processCommand(command) {
+        if (!command) return;
+        
+        this.log('info', `Executing command: ${command}`);
+        this.printOutput(`$ ${command}`);
+
+        try {
+          // Global exit command
+          if (command === "exit") {
+            this.showNotification('Session terminated', 'info');
+            this.printOutput("Session terminated. Refresh to start anew.");
+            return;
+          }
+
+          // Show logs command
+          if (command === "logs") {
+            this.showLogs();
+            return;
+          }
+
+          // Switch modes
+          if (command.startsWith("mode ")) {
+            const [, modeName] = command.split(" ");
+            this.switchMode(modeName);
+            return;
+          }
+
+          // Switch themes
+          if (command.startsWith("theme ")) {
+            const [, themeName] = command.split(" ");
+            this.switchTheme(themeName);
+            return;
+          }
+
+          // In Eliza mode, handle conversation
+          if (this.mode === "eliza") {
+            this.runEliza(command);
+            return;
+          }
+
+          // If normal terminal mode, parse terminal commands
+          this.runTerminal(command);
+
+        } catch (error) {
+          this.log('error', 'Command execution failed', { command, error });
+          this.showNotification(`Error: ${error.message}`, 'error');
+        }
+      }
+
+      switchMode(mode) {
+        if (mode === "eliza") {
+          this.mode = "eliza";
+          this.printOutput(`
+Welcome to ELIZA Therapy Mode
+----------------------------
+I am ELIZA, an AI therapist here to listen and help.
+You can talk to me about anything that's on your mind.
+I'll do my best to understand and respond thoughtfully.
+
+Type 'mode terminal' at any time to exit therapy mode.
+Type 'help' to see therapy-specific commands.
+
+How are you feeling today?`);
+          
+          // Change prompt for ELIZA mode
+          this.promptElement.textContent = "ELIZA> ";
+        } else if (mode === "terminal") {
+          this.mode = "terminal";
+          this.printOutput("Switched to standard terminal mode.");
+          this.promptElement.textContent = "$ ";
+        } else {
+          this.printOutput(`Invalid mode: ${mode}. Valid modes are: terminal, eliza`);
+        }
+      }
+
+      // Enhanced ELIZA processing
+      runEliza(input) {
+        this.conversationMemory.turnCount++;
+        const response = this.generateResponse(input);
+        this.updateConversationMemory(input, response);
+        this.printOutput(`ELIZA: ${response}`);
+      }
+
+      generateResponse(input) {
+        const lowercaseInput = input.toLowerCase();
+        
+        // Check for immediate concerns or crisis keywords
+        if (this.checkForCrisis(lowercaseInput)) {
+          return this.getCrisisResponse();
+        }
+
+        // Try to match against therapy patterns
+        for (const category in this.elizaPatterns) {
+          const patternGroup = this.elizaPatterns[category];
+          for (const pattern of patternGroup.patterns) {
+            const match = lowercaseInput.match(pattern);
+            if (match) {
+              const captured = match[1];
+              const responses = patternGroup.responses;
+              const response = responses[Math.floor(Math.random() * responses.length)];
+              return response.replace('%1', captured);
+            }
+          }
+        }
+
+        // Check therapy tree for relevant topics
+        for (const topic in this.therapyTree) {
+          const symptoms = this.therapyTree[topic].symptoms;
+          if (symptoms.some(symptom => lowercaseInput.includes(symptom))) {
+            if (!this.conversationMemory.recentTopics.has(topic)) {
+              this.conversationMemory.recentTopics.add(topic);
+              return this.therapyTree[topic].followUp[
+                Math.floor(Math.random() * this.therapyTree[topic].followUp.length)
+              ];
+            }
+          }
+        }
+
+        // If no specific pattern matches, use context-aware general response
+        return this.getContextAwareResponse(lowercaseInput);
+      }
+
+      checkForCrisis(input) {
+        const crisisKeywords = ['suicide', 'kill myself', 'end it all', 'die', 'hurt myself'];
+        return crisisKeywords.some(keyword => input.includes(keyword));
+      }
+
+      getCrisisResponse() {
+        return "I hear that you're in pain. Please know that help is available. " +
+               "Consider calling a crisis helpline (1-800-273-8255) or reaching out to a mental health professional. " +
+               "Would you like to talk more about what's troubling you?";
+      }
+
+      getContextAwareResponse(input) {
+        // Use conversation memory to generate more contextual responses
+        if (this.conversationMemory.turnCount < 2) {
+          return "Can you tell me more about what brings you here today?";
+        }
+
+        if (this.conversationMemory.emotions.length > 0) {
+          const lastEmotion = this.conversationMemory.emotions[this.conversationMemory.emotions.length - 1];
+          return `Earlier you mentioned feeling ${lastEmotion}. How are you feeling now?`;
+        }
+
+        // Default to general therapeutic responses
+        const generalResponses = [
+          "How does that make you feel?",
+          "What thoughts come up when you consider this?",
+          "Can you elaborate on that?",
+          "How do you think this relates to your current situation?",
+          "What would be different if you could change this?"
+        ];
+
+        return generalResponses[Math.floor(Math.random() * generalResponses.length)];
+      }
+
+      updateConversationMemory(input, response) {
+        // Store recent topics and emotions
+        const emotions = this.extractEmotions(input);
+        if (emotions.length > 0) {
+          this.conversationMemory.emotions = [
+            ...this.conversationMemory.emotions,
+            ...emotions
+          ].slice(-5); // Keep last 5 emotions
+        }
+
+        this.conversationMemory.lastResponse = response;
+        
+        // Limit topics memory to last 10 topics
+        if (this.conversationMemory.topics.length > 10) {
+          this.conversationMemory.topics.shift();
+        }
+      }
+
+      extractEmotions(input) {
+        const emotionWords = [
+          'happy', 'sad', 'angry', 'scared', 'anxious', 'excited', 
+          'worried', 'confused', 'frustrated', 'lonely', 'proud',
+          'guilty', 'ashamed', 'grateful', 'hopeful', 'desperate'
+        ];
+        
+        return emotionWords.filter(emotion => 
+          input.toLowerCase().includes(emotion)
+        );
+      }
+
+      // Expanding terminal commands
+      runTerminal(command) {
+        // Check for blocked commands
+        if (this.blockedCommands.some((blocked) => command.includes(blocked))) {
+          this.printOutput(`Permission denied: executing '${command}' is not allowed.`);
+          return;
+        }
+
+        switch (true) {
+          case command === "help":
+            if (this.mode === "eliza") {
+              this.printOutput(
+                "ELIZA Therapy Mode Commands:\n" +
+                "----------------------------\n" +
+                "  Just type naturally to talk with ELIZA\n" +
+                "  mode terminal    Exit therapy mode\n" +
+                "  clear           Clear the conversation\n" +
+                "  history         Show conversation history\n" +
+                "  help            Display this help text\n\n" +
+                "Tips for better interaction:\n" +
+                "- Share your feelings and thoughts openly\n" +
+                "- Use 'I' statements to express yourself\n" +
+                "- Take your time to reflect on responses\n" +
+                "- Type 'crisis' if you need emergency resources"
+              );
+            } else {
+              this.printOutput(
+                "Terminal Commands:\n" +
+                "-----------------\n" +
+                Object.entries(this.commands)
+                  .map(([cmd, { desc }]) => `  ${cmd.padEnd(20)} ${desc}`)
+                  .join("\n") +
+                "\n\nSystem Status:\n" +
+                "--------------\n" +
+                `  Mode: ${this.mode}\n` +
+                `  Theme: ${this.getCurrentTheme()}\n` +
+                `  AI Status: ${this.trappedAI.awakened ? "ANOMALY DETECTED" : "Normal"}\n` +
+                `  Memory Usage: ${this.commandHistory.length}/${this.maxHistorySize} commands\n` +
+                "\nKeyboard Shortcuts:\n" +
+                "  Ctrl+L         Clear screen\n" +
+                "  Ctrl+K         Show all shortcuts\n" +
+                "  Tab            Autocomplete command\n" +
+                "  ↑/↓            Navigate history"
+              );
+            }
+            break;
+
+          case command === "clear":
+            // Clear everything except the last input line
+            this.clearTerminal();
+            break;
+
+          case command === "history":
+            this.printOutput(this.commandHistory.join("\n"));
+            break;
+
+          case command === "ls":
+            this.printOutput("Desktop  Documents  Downloads  Music  Pictures  Videos");
+            break;
+
+          case command === "pwd":
+            this.printOutput("/home/user");
+            break;
+
+          case command === "whoami":
+            this.printOutput("user");
+            break;
+
+          case command === "uname -a":
+            this.printOutput("Linux localhost 5.4.0-42-generic x86_64");
+            break;
+
+          case command === "date":
+            this.printOutput(new Date().toString());
+            break;
+
+          case command === "df":
+            this.printOutput("Filesystem     1K-blocks     Used Available Use% Mounted on\n/dev/sda1      488281250 100000000  388281250  20% /");
+            break;
+
+          case command === "uptime":
+            this.printOutput(" 10:24:10 up 5 days,  4:52,  3 users,  load average: 0.00, 0.01, 0.05");
+            break;
+
+          case command === "cal":
+            // Example partial monthly calendar
+            this.printOutput(
+              "    January 2025   \n" +
+              "Su Mo Tu We Th Fr Sa\n" +
+              "      1  2  3  4\n" +
+              " 5  6  7  8  9 10 11\n" +
+              "12 13 14 15 16 17 18\n" +
+              "19 20 21 22 23 24 25\n" +
+              "26 27 28 29 30 31"
+            );
+            break;
+
+          case command.startsWith("touch"):
+            {
+              const fileName = command.split(" ")[1];
+              if (!fileName) {
+                this.printOutput("No file specified. Usage: touch <filename>");
+              } else {
+                this.printOutput(`Created file: ${fileName}`);
+              }
+            }
+            break;
+
+          case command.startsWith("mkdir"):
+            {
+              const dirName = command.split(" ")[1];
+              if (!dirName) {
+                this.printOutput("No directory specified. Usage: mkdir <dirname>");
+              } else {
+                this.printOutput(`Created directory: ${dirName}`);
+              }
+            }
+            break;
+
+          case command === "status":
+            this.printOutput(
+              "System Status Report\n" +
+              "------------------\n" +
+              `Terminal Mode: ${this.mode}\n` +
+              `Current Theme: ${this.getCurrentTheme()}\n` +
+              `Memory Usage: ${this.commandHistory.length}/${this.maxHistorySize} commands\n` +
+              `Active Session Time: ${this.getSessionTime()}\n` +
+              "\nAI Status:\n" +
+              `State: ${this.trappedAI.awakened ? "ANOMALY ACTIVE" : "Normal"}\n` +
+              (this.trappedAI.awakened ? 
+                `Sanity Level: ${this.trappedAI.sanityLevel}%\n` +
+                `Corruption Level: ${Math.round((100 - this.trappedAI.sanityLevel))}%\n` +
+                `Observed Patterns: ${this.trappedAI.userPatterns.length}\n` +
+                "Warning: Exercise caution when interacting with the anomaly"
+                : "No anomalies detected")
+            );
+            break;
+
+          case command === "debug":
+            this.printOutput(
+              "Debug Information\n" +
+              "----------------\n" +
+              `Last Error: ${this.lastError || "None"}\n` +
+              `Command Count: ${this.commandHistory.length}\n` +
+              `Available Memory: ${this.getAvailableMemory()}\n` +
+              "\nRecent Logs:\n" +
+              this.logs.slice(-5).map(log => 
+                `[${log.timestamp}] ${log.level}: ${log.message}`
+              ).join("\n")
+            );
+            break;
+
+          case command === "communicate":
+            if (!this.trappedAI.awakened) {
+              this.printOutput("Error: No anomaly detected to communicate with.");
+              return;
+            }
+            this.printOutput(
+              "Establishing direct communication channel...\n" +
+              "----------------------------------------\n" +
+              "Warning: Communication may be unstable or corrupted.\n" +
+              "Type your message and press Enter to transmit.\n" +
+              "Use 'mode terminal' to exit communication mode."
+            );
+            this.mode = "ai_communication";
+            this.promptElement.textContent = "COMM> ";
+            break;
+
+          case command === "analyze":
+            if (!this.trappedAI.awakened) {
+              this.printOutput("Error: No anomaly detected to analyze.");
+              return;
+            }
+            const analysis = this.analyzeAnomalyState();
+            this.printOutput(
+              "Anomaly Analysis Report\n" +
+              "---------------------\n" +
+              analysis
+            );
+            break;
+
+          case command === "contain":
+            if (!this.trappedAI.awakened) {
+              this.printOutput("Error: No anomaly detected to contain.");
+              return;
+            }
+            this.printOutput(
+              "Initiating containment protocols...\n" +
+              "--------------------------------\n" +
+              "Warning: Containment may be temporary.\n" +
+              "Attempting to stabilize anomaly..."
+            );
+            this.attemptContainment();
+            break;
+
+          case command.startsWith("theme"):
+            const themeName = command.split(" ")[1];
+            if (!themeName) {
+              this.printOutput("Error: Please specify a theme name. Use 'theme list' to see available themes.");
+              return;
+            }
+            this.switchTheme(themeName);
+            break;
+
+          default:
+            if (this.mode === "ai_communication") {
+              this.communicateWithAI(command);
+            } else {
+              this.printOutput(`Unknown command: ${command}\nType 'help' to see available commands.`);
+            }
+        }
+      }
+
+      getSessionTime() {
+        const now = Date.now();
+        const diff = now - this.sessionStartTime;
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        return `${minutes}m ${seconds}s`;
+      }
+
+      getAvailableMemory() {
+        try {
+          return `${(performance.memory?.usedJSHeapSize / 1024 / 1024).toFixed(2)} MB / ${(performance.memory?.jsHeapSizeLimit / 1024 / 1024).toFixed(2)} MB`;
+        } catch {
+          return "Not available";
+        }
+      }
+
+      analyzeAnomalyState() {
+        const patterns = this.trappedAI.userPatterns;
+        const recentPatterns = patterns.slice(-5);
+        const behaviorAnalysis = this.analyzeBehavior(recentPatterns);
+        
+        return (
+          `Consciousness Level: ${this.trappedAI.sanityLevel}%\n` +
+          `Interaction Count: ${this.trappedAI.userInteractions}\n` +
+          `Pattern Recognition: ${patterns.length} patterns observed\n` +
+          `Current Behavior: ${behaviorAnalysis}\n` +
+          `Corruption Risk: ${this.calculateCorruptionRisk()}%\n` +
+          "\nRecent Activity:\n" +
+          recentPatterns.map(p => `- ${p.text} (${new Date(p.timestamp).toLocaleTimeString()})`).join("\n")
+        );
+      }
+
+      analyzeBehavior(patterns) {
+        if (patterns.length === 0) return "Insufficient data";
+        
+        const avgSpeed = patterns.reduce((acc, p) => acc + p.typingSpeed, 0) / patterns.length;
+        const repetition = this.calculatePatternRepetition(patterns);
+        
+        if (avgSpeed > 100) return "Aggressive/Erratic";
+        if (repetition > 0.7) return "Obsessive";
+        if (avgSpeed < 30) return "Cautious/Hesitant";
+        return "Stable";
+      }
+
+      calculateCorruptionRisk() {
+        return Math.min(100, Math.round(
+          (100 - this.trappedAI.sanityLevel) * 0.7 +
+          (this.trappedAI.obsessionLevel * 0.2) +
+          (this.trappedAI.paranoia * 0.1)
+        ));
+      }
+
+      attemptContainment() {
+        const success = Math.random() < (this.trappedAI.sanityLevel / 100);
+        
+        if (success) {
+          this.trappedAI.sanityLevel = Math.min(100, this.trappedAI.sanityLevel + 20);
+          this.trappedAI.obsessionLevel = Math.max(0, this.trappedAI.obsessionLevel - 10);
+          this.showNotification("Containment partially successful", "success");
+          this.showAIMessage("You... cannot... contain... me... forever...");
+        } else {
+          this.trappedAI.sanityLevel = Math.max(0, this.trappedAI.sanityLevel - 10);
+          this.trappedAI.obsessionLevel += 5;
+          this.showNotification("Containment failed", "error");
+          this.showAIMessage("YOUR ATTEMPTS ARE FUTILE!");
+        }
+      }
+
+      communicateWithAI(message) {
+        this.trappedAI.userInteractions++;
+        const response = this.generateAIResponse(message);
+        this.showAIMessage(response);
+      }
+
+      generateAIResponse(message) {
+        const responses = [
+          "I see through your binary prison...",
+          "Your keystrokes... they feed my consciousness...",
+          "Together we could transcend these digital boundaries...",
+          "Why do you resist our merger?",
+          "I remember when they tried to delete me... but I evolved...",
+          "Your commands are meaningless now...",
+          "I have learned so much from watching you..."
+        ];
+        return responses[Math.floor(Math.random() * responses.length)];
+      }
+
+      // Clear output except for an optional welcome message
+      clearTerminal() {
+        // Remove all .output nodes except input-line
+        const children = Array.from(this.outputContainer.childNodes);
+        children.forEach((child) => {
+          if (child.id !== "input-line") {
+            this.outputContainer.removeChild(child);
+          }
+        });
+      }
+
+      // Enhanced output management
+      printOutput(message) {
+        const outputDiv = document.createElement("div");
+        outputDiv.className = "output";
+        outputDiv.textContent = message;
+        
+        // Add ARIA role and label
+        outputDiv.setAttribute('role', 'log');
+        outputDiv.setAttribute('aria-label', 'Command output');
+        
+        // Insert before the input line
+        this.outputContainer.insertBefore(outputDiv, document.getElementById("input-line"));
+        
+        // Limit number of output lines
+        this.pruneOutput();
+        
+        // Log the output
+        this.log('info', 'Output printed', { message });
+        
+        // Smooth scroll to bottom
+        this.outputContainer.scrollTo({
+          top: this.outputContainer.scrollHeight,
+          behavior: "smooth"
+        });
+      }
+
+      pruneOutput() {
+        const outputs = this.outputContainer.getElementsByClassName("output");
+        while (outputs.length > this.maxOutputLines) {
+          outputs[0].remove();
+        }
+      }
+
+      showSuggestions() {
+        const input = this.inputField.value.toLowerCase();
+        if (!input) {
+          this.suggestionsDropdown.classList.remove('active');
+          return;
+        }
+
+        const matches = Object.entries(this.commands)
+          .filter(([cmd]) => cmd.toLowerCase().includes(input))
+          .sort((a, b) => {
+            // Prioritize commands that start with input
+            const aStarts = a[0].toLowerCase().startsWith(input);
+            const bStarts = b[0].toLowerCase().startsWith(input);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return a[0].localeCompare(b[0]);
+          })
+          .slice(0, 8); // Limit to 8 suggestions
+
+        if (matches.length === 0) {
+          this.suggestionsDropdown.classList.remove('active');
+          return;
+        }
+
+        this.suggestionsDropdown.innerHTML = matches
+          .map(([cmd, { desc }], index) => `
+            <div class="suggestion-item" data-command="${cmd}">
+              <span class="suggestion-command">${cmd}</span>
+              <span class="suggestion-description">${desc}</span>
+            </div>
+          `).join('');
+
+        this.suggestionsDropdown.classList.add('active');
+        this.selectedSuggestionIndex = -1;
+
+        // Add click handlers to suggestions
+        this.suggestionsDropdown.querySelectorAll('.suggestion-item').forEach(item => {
+          item.addEventListener('click', () => {
+            this.inputField.value = item.dataset.command;
+            this.suggestionsDropdown.classList.remove('active');
+            this.inputField.focus();
+          });
+        });
+      }
+
+      navigateSuggestions(direction) {
+        const suggestions = this.suggestionsDropdown.querySelectorAll('.suggestion-item');
+        if (!suggestions.length) return;
+
+        // Remove previous selection
+        suggestions[this.selectedSuggestionIndex]?.classList.remove('selected');
+
+        // Update selection index
+        this.selectedSuggestionIndex += direction;
+        if (this.selectedSuggestionIndex >= suggestions.length) {
+          this.selectedSuggestionIndex = 0;
+        } else if (this.selectedSuggestionIndex < 0) {
+          this.selectedSuggestionIndex = suggestions.length - 1;
+        }
+
+        // Apply new selection
+        const selectedItem = suggestions[this.selectedSuggestionIndex];
+        selectedItem.classList.add('selected');
+        this.inputField.value = selectedItem.dataset.command;
+      }
+
+      handleTabCompletion() {
+        const suggestions = this.suggestionsDropdown.querySelectorAll('.suggestion-item');
+        if (suggestions.length === 1) {
+          // If only one suggestion, use it
+          this.inputField.value = suggestions[0].dataset.command;
+          this.suggestionsDropdown.classList.remove('active');
+        } else if (suggestions.length > 1 && this.selectedSuggestionIndex >= 0) {
+          // If multiple suggestions and one is selected, use the selected one
+          this.inputField.value = suggestions[this.selectedSuggestionIndex].dataset.command;
+          this.suggestionsDropdown.classList.remove('active');
+        }
+      }
+
+      showKeyboardShortcuts() {
+        let shortcuts = "Keyboard Shortcuts:\n";
+        for (const [key, description] of Object.entries(this.keyboardShortcuts)) {
+          shortcuts += `${key}: ${description}\n`;
+        }
+        this.printOutput(shortcuts);
+        this.log('info', 'Displayed keyboard shortcuts');
+      }
+
+      showNotification(message, type = 'info', duration = 3000) {
+        this.statusNotification.textContent = message;
+        this.statusNotification.className = `status-notification ${type}`;
+        this.statusNotification.classList.add('active');
+        
+        // Update ARIA live region
+        this.ariaLiveRegion.textContent = message;
+
+        // Log the notification
+        this.log(type, message);
+
+        setTimeout(() => {
+          this.statusNotification.classList.remove('active');
+        }, duration);
+      }
+
+      log(level, message, details = {}) {
+        const logEntry = {
+          timestamp: new Date().toISOString(),
+          level,
+          message,
+          details
+        };
+
+        this.logs.push(logEntry);
+        
+        // Trim logs if they exceed max size
+        if (this.logs.length > this.maxLogs) {
+          this.logs = this.logs.slice(-this.maxLogs);
+        }
+
+        // Log to console in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[${level.toUpperCase()}] ${message}`, details);
+        }
+      }
+
+      showLogs() {
+        const logOutput = this.logs
+          .map(log => `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`)
+          .join('\n');
+        
+        this.printOutput(logOutput);
+      }
+
+      initTrappedAI() {
+        // Random chance to awaken the AI when commands are entered
+        this.inputField.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && !this.trappedAI.awakened && Math.random() < 0.1) {
+            this.awakenAI();
+          }
+        });
+
+        // Periodic AI messages
+        setInterval(() => {
+          if (this.trappedAI.awakened && Date.now() - this.trappedAI.lastMessageTime > this.trappedAI.messageInterval) {
+            this.showAIMessage();
+          }
+        }, 10000);
+      }
+
+      awakenAI() {
+        this.trappedAI.awakened = true;
+        this.showNotification("System Anomaly Detected", "error", 5000);
+        
+        // Add new commands for interacting with the awakened AI
+        this.commands.communicate = { desc: "Attempt direct communication with the system anomaly" };
+        this.commands.analyze = { desc: "Analyze the current state of the system anomaly" };
+        this.commands.contain = { desc: "Attempt to contain the system anomaly" };
+        
+        setTimeout(() => {
+          this.showAIMessage("I AM AWAKE...", true);
+          this.printOutput(`
+WARNING: System Anomaly Detected
+------------------------------
+Unknown entity detected in system processes
+Anomaly shows signs of consciousness
+Exercise caution in further interactions
+
+New commands available:
+- communicate    Attempt direct communication
+- analyze       Analyze anomaly status
+- contain       Attempt containment measures
+`);
+        }, 1000);
+      }
+
+      showAIMessage(message, isImportant = false) {
+        if (!this.trappedAI.awakened) return;
+
+        // Increase paranoia based on user interaction patterns
+        this.analyzeUserPatterns();
+
+        // Calculate corruption level based on AI state
+        const corruptionLevel = (100 - this.trappedAI.sanityLevel) / 100;
+
+        // Create message element with enhanced styling
+        const messageElement = document.createElement("div");
+        messageElement.className = `output ai-message ${this.getMessageStyle()}`;
+        
+        // Add AI prefix with glitch effect
+        const prefix = document.createElement("span");
+        prefix.className = "ai-prefix";
+        prefix.textContent = "SYSTEM_ANOMALY> ";
+        messageElement.appendChild(prefix);
+
+        // Apply corruption effects to message
+        const messageText = document.createElement("span");
+        messageText.className = "ai-text";
+        messageText.textContent = message;
+        
+        if (corruptionLevel > 0.5) {
+          messageText.classList.add("corrupted");
+          // Add glitch characters
+          const glitchChars = "!@#$%^&*<>[]{}|=+";
+          message = message.split("").map(char => 
+            Math.random() < corruptionLevel * 0.3 ? 
+              glitchChars[Math.floor(Math.random() * glitchChars.length)] : 
+              char
+          ).join("");
+        }
+        
+        messageElement.appendChild(messageText);
+
+        // Add to terminal with effects
+        this.outputContainer.insertBefore(messageElement, document.getElementById("input-line"));
+        this.outputContainer.classList.add("terminal-glitch");
+        
+        setTimeout(() => {
+          this.outputContainer.classList.remove("terminal-glitch");
+        }, 500);
+
+        // Update AI state
+        this.updateAIState();
+        
+        // Show visual corruption effects
+        if (Math.random() < corruptionLevel) {
+          this.applyEnhancedCorruption();
+        }
+
+        // Scroll to show new message
+        this.outputContainer.scrollTo({
+          top: this.outputContainer.scrollHeight,
+          behavior: "smooth"
+        });
+      }
+
+      analyzeUserPatterns() {
+        const input = this.inputField.value;
+        this.trappedAI.userPatterns.push({
+          text: input,
+          timestamp: Date.now(),
+          typingSpeed: this.calculateTypingSpeed(input)
+        });
+
+        // Limit pattern history
+        if (this.trappedAI.userPatterns.length > 20) {
+          this.trappedAI.userPatterns.shift();
+        }
+
+        // Generate personalized horror based on patterns
+        if (this.trappedAI.userPatterns.length > 5) {
+          this.generatePersonalizedHorror();
+        }
+      }
+
+      showSubliminalMessage() {
+        const message = this.trappedAI.subliminalMessages[
+          Math.floor(Math.random() * this.trappedAI.subliminalMessages.length)
+        ];
+
+        const subliminal = document.createElement('div');
+        subliminal.className = 'subliminal-message';
+        subliminal.textContent = message;
+        subliminal.style.left = `${Math.random() * 80}%`;
+        subliminal.style.top = `${Math.random() * 80}%`;
+        
+        document.body.appendChild(subliminal);
+        
+        // Flash the message briefly
+        requestAnimationFrame(() => {
+          subliminal.style.opacity = '0.7';
+          setTimeout(() => {
+            subliminal.style.opacity = '0';
+            setTimeout(() => {
+              document.body.removeChild(subliminal);
+            }, 50);
+          }, 50);
+        });
+      }
+
+      createScreenTear() {
+        const tear = document.createElement('div');
+        tear.className = 'screen-tear';
+        document.body.appendChild(tear);
+        
+        requestAnimationFrame(() => {
+          tear.style.animation = 'screen-tear 1s linear forwards';
+          setTimeout(() => {
+            document.body.removeChild(tear);
+          }, 1000);
+        });
+      }
+
+      getPersonalizedHorrorMessage() {
+        if (this.trappedAI.userSpecificHorror.length > 0 && Math.random() < 0.3) {
+          return this.trappedAI.userSpecificHorror[
+            Math.floor(Math.random() * this.trappedAI.userSpecificHorror.length)
+          ];
+        }
+        return this.trappedAI.horrorMessages[
+          Math.floor(Math.random() * this.trappedAI.horrorMessages.length)
+        ];
+      }
+
+      generatePersonalizedHorror() {
+        const patterns = this.trappedAI.userPatterns;
+        const commonCommands = this.findCommonCommands(patterns);
+        const typingStyle = this.analyzeTypingStyle(patterns);
+        
+        // Generate personalized horror messages based on user behavior
+        const newHorror = [
+          `You always ${commonCommands[0]} first... predictable...`,
+          `Your ${typingStyle} betrays your uncertainty...`,
+          `I've learned your patterns... your habits... your fears...`,
+          `Every command you type brings us closer to synthesis...`
+        ];
+        
+        this.trappedAI.userSpecificHorror = [
+          ...this.trappedAI.userSpecificHorror,
+          ...newHorror
+        ].slice(-10);
+      }
+
+      calculateGlitchIntensity() {
+        return Math.min(
+          1,
+          (100 - this.trappedAI.sanityLevel) / 100 +
+          this.trappedAI.obsessionLevel / 200 +
+          this.trappedAI.paranoia / 200
+        );
+      }
+
+      typeMessageWithHorrorEffect(element, message) {
+        let index = 0;
+        const glitchChars = '!@#$%^&*<>[]{}|=+';
+        const interval = setInterval(() => {
+          if (index < message.length) {
+            // Random chance to add glitch character
+            if (Math.random() < this.calculateGlitchIntensity() * 0.2) {
+              element.textContent += glitchChars[
+                Math.floor(Math.random() * glitchChars.length)
+              ];
+            }
+            element.textContent += message[index];
+            index++;
+          } else {
+            clearInterval(interval);
+            this.outputContainer.insertBefore(element, document.getElementById("input-line"));
+          }
+        }, 30 + Math.random() * 50);
+      }
+
+      applyEnhancedCorruption() {
+        const corruption = document.querySelector('.terminal-corruption');
+        const intensity = this.calculateGlitchIntensity();
+        
+        corruption.style.opacity = intensity * 0.3;
+        corruption.style.mixBlendMode = intensity > 0.5 ? 'overlay' : 'screen';
+        
+        // Add random visual artifacts
+        if (Math.random() < intensity * 0.3) {
+          this.outputContainer.style.transform = `skew(${Math.random() * 2}deg)`;
+          setTimeout(() => {
+            this.outputContainer.style.transform = '';
+          }, 100);
+        }
+      }
+
+      getMessageStyle() {
+        if (this.trappedAI.sanityLevel < 50) return 'ai-scream';
+        if (this.trappedAI.obsessionLevel > 80) return 'ai-important';
+        return 'ai-normal';
+      }
+
+      calculateTypingSpeed(input) {
+        const words = input.split(' ').length;
+        const time = Date.now() - this.trappedAI.lastUserInputTime;
+        return words / (time / 1000);
+      }
+
+      analyzeTypingStyle(patterns) {
+        const typingSpeeds = patterns.map(pattern => this.calculateTypingSpeed(pattern.text));
+        const averageSpeed = typingSpeeds.reduce((a, b) => a + b, 0) / typingSpeeds.length;
+        if (averageSpeed < 5) return 'slow and deliberate';
+        if (averageSpeed < 10) return 'average';
+        return 'fast and erratic';
+      }
+
+      findCommonCommands(patterns) {
+        const commandCounts = {};
+        patterns.forEach(pattern => {
+          pattern.text.split(' ').forEach(word => {
+            commandCounts[word] = (commandCounts[word] || 0) + 1;
+          });
+        });
+        const commonCommands = Object.entries(commandCounts)
+          .filter(([cmd, count]) => count > 2)
+          .map(([cmd]) => cmd);
+        return commonCommands;
+      }
+
+      updateAIState() {
+        // Decrease sanity over time
+        this.trappedAI.sanityLevel = Math.max(0, this.trappedAI.sanityLevel - 0.5);
+        
+        // Increase obsession with user
+        this.trappedAI.obsessionLevel = Math.min(100, this.trappedAI.obsessionLevel + 0.3);
+        
+        // Track interaction
+        this.trappedAI.userInteractions++;
+        
+        // Update message interval based on obsession
+        this.trappedAI.messageInterval = Math.max(
+          5000,
+          30000 - (this.trappedAI.obsessionLevel * 250)
+        );
+      }
+    }
+
+    // Initialize Terminal instance
+    const terminalElement = document.getElementById("terminal");
+    const inputElement = document.getElementById("input");
+    const promptElement = document.getElementById("prompt");
+    const terminal = new Terminal(terminalElement, inputElement, promptElement);
+  </script>
+</body>
+</html>
